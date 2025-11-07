@@ -1,0 +1,32 @@
+# Large model files (download from Google Drive links in README)
+artifacts/news_subject_linear_svc.joblib
+artifacts/news_subject_lr.joblib
+artifacts/news_subject_improved.joblib
+artifacts/intent_supervised.joblib
+artifacts/intent_tfidf.joblib
+artifacts/news_subject_tfidf.joblib
+reputation_model/model.safetensors
+stance_model/model.safetensors
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# MacOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
