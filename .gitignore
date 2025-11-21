@@ -30,3 +30,9 @@ build/
 .vscode/
 .idea/
 
+# News Analyzer App
+news-analyzer-app/frontend/node_modules/
+news-analyzer-app/frontend/build/
+news-analyzer-app/backend/__pycache__/
+news-analyzer-app/backend/*.log
+
