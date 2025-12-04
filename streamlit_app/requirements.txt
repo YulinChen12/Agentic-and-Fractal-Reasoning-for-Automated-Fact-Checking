@@ -1,0 +1,13 @@
+streamlit
+pandas
+numpy
+scikit-learn
+torch
+transformers
+nrclex
+vaderSentiment
+google-genai
+google-search-results
+nltk
+
+scipy
