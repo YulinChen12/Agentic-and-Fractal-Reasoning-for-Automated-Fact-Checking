@@ -25,8 +25,48 @@ from serpapi import GoogleSearch
 import os
 
 # --- Configuration & Setup ---
-st.set_page_config(page_title="News Analyzer (Streamlit)", layout="wide")
-st.title("Unified News Analysis System")
+st.set_page_config(
+    page_title="News Analyzer AI",
+    page_icon="📰",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Custom CSS for "fancy" look
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f8f9fa;
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 5px;
+        height: 3em;
+        font-weight: bold;
+    }
+    h1 {
+        color: #2c3e50;
+        text-align: center;
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        padding-bottom: 10px;
+    }
+    .stTextInput>div>div>input {
+        border-radius: 5px;
+    }
+    .stTextArea>div>div>textarea {
+        border-radius: 5px;
+    }
+    .report-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title("📰 Intelligent News Analyzer")
+st.markdown("<div style='text-align: center; color: #666; margin-bottom: 30px;'>AI-Powered Fact-Checking & Analysis Dashboard</div>", unsafe_allow_html=True)
 
 # Suppress warnings
 warnings.filterwarnings("ignore")
@@ -67,7 +107,7 @@ def first_subject(s):
 
 @st.cache_resource
 def load_news_coverage_model():
-    st.info("Loading News Coverage Model...")
+    # st.info("Loading News Coverage Model...")
     df_tr = read_tsv(DATA_PATH + "train2.tsv")
     
     X_tr = df_tr.apply(text_of, axis=1)
@@ -92,7 +132,7 @@ def load_news_coverage_model():
 
 @st.cache_resource
 def load_intent_model():
-    st.info("Loading Intent Classification Model...")
+    # st.info("Loading Intent Classification Model...")
     df = read_tsv(DATA_PATH + "train2.tsv")
     for c in ["statement","context","justification"]:
         df[c] = df[c].fillna("").astype(str).str.strip()
@@ -126,7 +166,7 @@ def load_intent_model():
 
 @st.cache_resource
 def load_sensationalism_model():
-    st.info("Loading Sensationalism Model...")
+    # st.info("Loading Sensationalism Model...")
     TOKEN_RE = re.compile(r"[A-Za-z]+")
     EVIDENCE_PATTERNS = [
         r"\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\b",
@@ -170,7 +210,7 @@ def load_sensationalism_model():
 
 @st.cache_resource
 def load_sentiment_model():
-    st.info("Loading Sentiment Analysis Model...")
+    # st.info("Loading Sentiment Analysis Model...")
     
     ALPHA = 1.0
     EPS = 1e-8
@@ -270,7 +310,7 @@ def load_sentiment_model():
 
 @st.cache_resource
 def load_bert_models():
-    st.info("Loading Reputation and Stance Models (BERT)...")
+    # st.info("Loading Reputation and Stance Models (BERT)...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Reputation
@@ -298,11 +338,12 @@ def load_bert_models():
     return rep_model, rep_tok, stance_model, stance_tok, device
 
 # --- Load All Models ---
-news_pipe = load_news_coverage_model()
-intent_tfidf, PROTO_MAT, CLASS_NAMES = load_intent_model()
-sens_model, sens_tfidf, evidence_anchors = load_sensationalism_model()
-sent_clf, sent_artifacts, sent_analyzer, sent_features, sent_extractor = load_sentiment_model()
-rep_model, rep_tok, stance_model, stance_tok, device = load_bert_models()
+with st.spinner("Initializing AI Models..."):
+    news_pipe = load_news_coverage_model()
+    intent_tfidf, PROTO_MAT, CLASS_NAMES = load_intent_model()
+    sens_model, sens_tfidf, evidence_anchors = load_sensationalism_model()
+    sent_clf, sent_artifacts, sent_analyzer, sent_features, sent_extractor = load_sentiment_model()
+    rep_model, rep_tok, stance_model, stance_tok, device = load_bert_models()
 
 # --- Prediction Wrappers ---
 
@@ -604,18 +645,39 @@ def run_agent(title, body):
 
 # --- UI ---
 
+st.markdown("---")
+
 with st.form("article_form"):
-    article_title = st.text_input("Article Title", placeholder="Enter the headline...")
-    article_body = st.text_area("Article Body", height=300, placeholder="Paste the full article text here...")
-    submitted = st.form_submit_button("Analyze Article")
+    col_input, col_help = st.columns([3, 1])
+    
+    with col_input:
+        article_title = st.text_input("Article Headline", placeholder="Enter the headline here...")
+        article_body = st.text_area("Article Content", height=400, placeholder="Paste the full article text here...")
+    
+    with col_help:
+        st.markdown("### ℹ️ How it works")
+        st.info(
+            "**1. Input Data**\\n"
+            "Paste the headline and body text of the article you want to analyze.\\n\\n"
+            "**2. Run Analysis**\\n"
+            "Our AI agent will run 6 predictive models and cross-reference claims with Google Search.\\n\\n"
+            "**3. Review Report**\\n"
+            "Get a comprehensive dashboard with fact-checking and context."
+        )
+        st.write("") # Spacer
+        st.write("") # Spacer
+        submitted = st.form_submit_button("🔍 Start Analysis", type="primary")
 
 if submitted:
     if not article_title or not article_body:
-        st.error("Please provide both a title and the body text.")
+        st.error("⚠️ Please provide both a headline and the body text.")
     else:
         try:
             result_text = run_agent(article_title, article_body)
+            st.markdown("---")
+            st.markdown("<div class='report-container'>", unsafe_allow_html=True)
             st.markdown(result_text)
+            st.markdown("</div>", unsafe_allow_html=True)
         except Exception as e:
             st.error(f"An error occurred: {e}")
 
