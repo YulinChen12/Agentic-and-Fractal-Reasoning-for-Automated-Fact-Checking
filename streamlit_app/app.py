@@ -72,7 +72,7 @@ st.markdown("<div style='text-align: center; color: #666; margin-bottom: 30px;'>
 warnings.filterwarnings("ignore")
 
 # Download NLTK data
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def download_nltk_data():
     nltk.download('punkt')
     nltk.download('punkt_tab')
@@ -105,7 +105,7 @@ def first_subject(s):
 
 # --- Model Loading & Training (Cached) ---
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_news_coverage_model():
     # st.info("Loading News Coverage Model...")
     df_tr = read_tsv(DATA_PATH + "train2.tsv")
@@ -130,7 +130,7 @@ def load_news_coverage_model():
     pipe.fit(X_tr, y_tr)
     return pipe
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_intent_model():
     # st.info("Loading Intent Classification Model...")
     df = read_tsv(DATA_PATH + "train2.tsv")
@@ -164,7 +164,7 @@ def load_intent_model():
     
     return intent_tfidf, PROTO_MAT, CLASS_NAMES
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_sensationalism_model():
     # st.info("Loading Sensationalism Model...")
     TOKEN_RE = re.compile(r"[A-Za-z]+")
@@ -208,7 +208,7 @@ def load_sensationalism_model():
     
     return rf_model, tfidf, evidence_anchors
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_sentiment_model():
     # st.info("Loading Sentiment Analysis Model...")
     
@@ -308,7 +308,7 @@ def load_sentiment_model():
     
     return clf, artifacts, analyzer, features, extract_features
 
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_bert_models():
     # st.info("Loading Reputation and Stance Models (BERT)...")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
