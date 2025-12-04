@@ -23,6 +23,7 @@ from google import genai
 from google.genai import types
 from serpapi import GoogleSearch
 import os
+import json
 
 # --- Configuration & Setup ---
 st.set_page_config(
@@ -338,12 +339,33 @@ def load_bert_models():
     return rep_model, rep_tok, stance_model, stance_tok, device
 
 # --- Load All Models ---
-with st.spinner("Initializing AI Models..."):
+loading_container = st.empty()
+with loading_container.container():
+    st.markdown("### Initializing AI Models...")
+    p_bar = st.progress(0)
+    status_text = st.empty()
+
+    status_text.text("Loading News Coverage Model...")
     news_pipe = load_news_coverage_model()
+    p_bar.progress(20)
+
+    status_text.text("Loading Intent Classification Model...")
     intent_tfidf, PROTO_MAT, CLASS_NAMES = load_intent_model()
+    p_bar.progress(40)
+
+    status_text.text("Loading Sensationalism Model...")
     sens_model, sens_tfidf, evidence_anchors = load_sensationalism_model()
+    p_bar.progress(60)
+
+    status_text.text("Loading Sentiment Analysis Model...")
     sent_clf, sent_artifacts, sent_analyzer, sent_features, sent_extractor = load_sentiment_model()
+    p_bar.progress(80)
+
+    status_text.text("Loading Reputation & Stance Models...")
     rep_model, rep_tok, stance_model, stance_tok, device = load_bert_models()
+    p_bar.progress(100)
+
+loading_container.empty()
 
 # --- Prediction Wrappers ---
 
@@ -493,11 +515,85 @@ def serpapi_search(query: str) -> dict:
     except Exception as e:
         return {"error": f"Search failed: {str(e)}"}
 
+# --- Few-Shot Helper Functions ---
+
+def load_data(path):
+    if not os.path.exists(path):
+        return []
+        
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    if isinstance(data, dict) and "articles" in data:
+        return data["articles"]
+    elif isinstance(data, list):
+        return data
+    else:
+        return []
+
+def format_few_shot_context(articles):
+    """
+    Formats the training articles into a prompt string.
+    """
+    output_text = "Here are reference examples of human-verified analysis:\\n\\n"
+    
+    for art in articles:
+        # --- Inputs --- 
+        headline = art.get('headline', 'No Title')
+        body = art.get('text', 'No Text')
+        source = art.get('news_source', 'Unknown Source')
+        author = art.get('author', 'Unknown Author')
+        date = art.get('date', 'Unknown Date')
+        
+        # --- GROUND TRUTH --- 
+        topic = art.get('coverage', 'N/A')
+        intent = art.get('intent', 'N/A')
+        sensationalism = art.get('sensationalism', 'N/A')
+        sentiment = art.get('sentiment', 'N/A')
+        reputation = art.get('reputation', 'N/A')
+        stance = art.get('stance', 'N/A')
+        title_vs_body = art.get('title_vs_body', 'N/A')
+        veracity = art.get('context_veracity', 'N/A')
+        location = art.get('location', 'N/A')
+        
+        # --- INPUT BLOCK ---
+        output_text += f"--- EXAMPLE INPUT ---\\n"
+        output_text += f"Source: {source}\\n"
+        output_text += f"Author: {author}\\n"
+        output_text += f"Date: {date}\\n"
+        output_text += f"Title: {headline}\\n"
+        output_text += f"Body: {body}\\n\\n"
+        
+        # --- OUTPUT BLOCK ---
+        output_text += f"--- EXAMPLE HUMAN LABELING OUTPUT ---\\n"
+        output_text += f"- news_topic: {topic}\\n"
+        output_text += f"- intent: {intent}\\n"
+        output_text += f"- sensationalism: {sensationalism}\\n"
+        output_text += f"- sentiment: {sentiment}\\n"
+        output_text += f"- reputation: {reputation}\\n"
+        output_text += f"- stance: {stance}\\n"
+        output_text += f"- title_vs_body: {title_vs_body}\\n"
+        output_text += f"- context_veracity: {veracity}\\n"
+        output_text += f"- location: {location}\\n\\n"
+        
+    return output_text
+
 # --- Gemini Agent ---
 
 PROMPT_COT_GOOGLE = """
 You are a senior investigative editor at an independent fact-checking newsroom.
 You are mentoring a junior analyst and must produce a rigorous, transparent fact-check report for each article.
+
+**FEW-SHOT EXAMPLES (GROUND TRUTH):**
+{few_shot_examples}
+
+**CALIBRATION INSTRUCTION (CRITICAL):**
+The examples above represent the **Gold Standard** for this task.
+1. **Analyze the patterns:** Observe how the human annotators defined "Sensationalism," "Stance," and "News Topic" in the examples above.
+2. **Mimic the Logic:** You must calibrate your internal thresholds to match these examples.
+   - Example: If the human labels a slightly critical text as "Neutral," you must also label similar texts as "Neutral."
+   - Example: If the human labels a specific source as "High Reputation," align your judgment with that standard.
+3. **Prioritize Precedent:** Your final labels must be consistent with the decision boundaries established in the Ground Truth examples provided above.
 
 Your goal is to provide a hybrid analysis.
 
@@ -528,13 +624,21 @@ Your goal is to provide a hybrid analysis.
 Your final response MUST be a clean Markdown dashboard with the following two main sections:
 
 ## Phase 1: Model Predictions
-- Extract and list the main predicted label for **ALL 6 factors** below:
+**CRITICAL INSTRUCTION: STRICT TRANSCRIPTION ONLY**
+- In this section, you are a **mechanical transcriber**.
+* **Action:** You MUST call `analyze_complete_article` immediately using the article's title and body.
+* **Wait:** Do not proceed to Phase 2 until you receive the JSON output from this tool.
+- You must output the **EXACT** label provided by the `analyze_complete_article` tool.
+- **DO NOT** correct, interpret, or change the tool's labels, even if you think they are wrong.
+
+**Required Output List:**
   1. news_topic
-  2. reputation
+  2. intent
   3. sensationalism
   4. sentiment
-  5. stance
-  6. intent
+  5. reputation
+  6. stance
+  
 - Do NOT show raw JSON.
 
 ## Phase 2: Qualitative Analysis
@@ -615,6 +719,13 @@ Start by calling `analyze_complete_article`.
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
 def run_agent(title, body):
+    # Load few-shot data
+    try:
+        train_articles = load_data(DATA_PATH + "train_article.json")
+        few_shot_context = format_few_shot_context(train_articles)
+    except Exception:
+        few_shot_context = ""
+
     tools = [analyze_complete_article, serpapi_search]
     system_instruction = (
         "You are a news-analysis assistant. "
@@ -623,8 +734,11 @@ def run_agent(title, body):
         "Do not output raw tool JSON in your final answer."
     )
     
-    article_content = f"Title: {title}\nBody: {body}"
-    final_prompt = PROMPT_COT_GOOGLE.format(article_to_analyze=article_content)
+    article_content = f"Title: {title}\\nBody: {body}"
+    final_prompt = PROMPT_COT_GOOGLE.format(
+        few_shot_examples=few_shot_context,
+        article_to_analyze=article_content
+    )
     
     config = types.GenerateContentConfig(
         tools=tools,
@@ -657,12 +771,16 @@ with st.form("article_form"):
     with col_help:
         st.markdown("### ℹ️ How it works")
         st.info(
-            "**1. Input Data**\\n"
-            "Paste the headline and body text of the article you want to analyze.\\n\\n"
-            "**2. Run Analysis**\\n"
-            "Our AI agent will run 6 predictive models and cross-reference claims with Google Search.\\n\\n"
-            "**3. Review Report**\\n"
-            "Get a comprehensive dashboard with fact-checking and context."
+            """
+            **1. Input Data**
+            Paste the headline and body text of the article you want to analyze.
+
+            **2. Run Analysis**
+            Our AI agent will run 6 predictive models and cross-reference claims with Google Search.
+
+            **3. Review Report**
+            Get a comprehensive dashboard with fact-checking and context.
+            """
         )
         st.write("") # Spacer
         st.write("") # Spacer
