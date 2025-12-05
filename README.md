@@ -42,16 +42,27 @@ DSC180A-GroupNull/
 ```
 ### Setup Steps
 
-1. **Clone the repository**
+1. **Log into DSMLP and launch the required GPU environment**
+All model training, evaluation, and experiments should be run inside the following DSMLP container:
+```
+launch-scipy-ml.sh -W DSC180A_FA25_A00 -c 8 -m 32 -g 1
+```
+   
+2. **Clone the repository**
 ```bash
 git clone https://github.com/YulinChen12/DSC180A-GroupNull.git
 cd DSC180A-GroupNull
 ```
 
-2. **Install required packages**
+3. **Install required packages using Conda**
 ```
 conda env create -f requirements.yml
 conda activate groupnull
+```
+4. **Ensure Git LFS is installed and pull large files**
+```
+git lfs install
+git lfs pull
 ```
 
 ### Dataset Overview
@@ -92,7 +103,52 @@ To train or evaluate a model:
    - load LIAR-PLUS or processed data
    - fine-tune a classifier
    - evaluate (accuracy, F1, confusion matrix)
+  
+
+### 2. Combined Predictive Feature Pipeline
+The notebook ```combined_pred_model.ipynb``` runs an input article through all predictive models and produces:
+
+```
+{
+  "stance": "...",
+  "reputation": "...",
+  "sensationalism": "...",
+  "sentiment": "...",
+  "coverage": "..."
+}
+```
+
+This structured output becomes the input to the agentic LLM reasoning layer.
 
 
+### 3. Final Hybrid Agentic Model
+The notebook ```final_model.ipynb``` is the experimental notebook where we combine the final predictive feature pipeline (stance, sensationalism, sentiment, reputation, coverage, intent) and the Gemini Flash generative model to evaluate how different prompting strategies affect misinformation classification quality.
 
+This notebook runs three structured experiments:
+
+- **Experiment 1 — Zero-Shot Prompting**
+
+    - Gemini Flash receives only the article text and predictive model labels and is asked to produce a credibility assessment without any examples or reasoning demonstrations. This serves as our baseline agent performance.
+
+- **Experiment 2 — Few-Shot + Chain-of-Thought Prompting**
+
+  - Here we build onto the baseline agent, and add 7 labeled examples with a recipe for reasoning. This experiment tests whether explicit examples and step-by-step reasoning improve the model’s accuracy and explanation quality.
+
+- **Experiment 3 — Few-Shot Chain-of-Thought + Web Search (SERP API)**
+
+  - The third experiment extends Experiment 2 by adding live web search retrieval via SERP API.
+
+
+### 5. Running the Streamlit App
+The Streamlit web interface is located in ```streamlit_app/app.py```
+
+Start Using Provided Script in your terminal
+```
+./start_streamlit.sh
+```
+
+This launches a live UI where users can paste article text to 
+- Visualize stance, sentiment, sensationalism, reputation, news coverage predictions
+- Get additional feature labels: title vs body alignment, context veracity, location
+- Run the agentic Gemini-based credibility analysis
 
