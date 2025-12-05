@@ -1,63 +1,45 @@
-# DSC180A-GroupNull
+# DSC180A-GroupNull: Misinformation Detection System
 
 ## Project Overview
 
-This project is a unified article analysis system that integrates 6 machine learning models to comprehensively analyze news articles and text content. The system provides multi-dimensional analysis including topic classification, intent detection, sensationalism scoring, sentiment analysis, reputation assessment, and stance detection.
+This repository contains the full implementation of our DSC 180A capstone project: a hybrid  misinformation detection pipeline combining predictive models with a grounded LLM (Gemini 2.5 Flash). The system extracts stance, sentiment, sensationalism, reputation, and news-coverage features from input articles and integrates them into a multi-step reasoning agent for credibility analysis.
 
-Developed as part of DSC180A at UC San Diego.
+## Repository Structure
 
-## Notebooks
-
-### Combined_Model.ipynb
-
-The main notebook that integrates all 6 models into a unified system for comprehensive article analysis:
-
-**6 Integrated Models:**
-1. **News Coverage Classification** - Identifies the topic/subject of the article
-2. **Intent Classification** - Determines communication intent (inform, persuade, entertain, deceive)
-3. **Sensationalism Detection** - Classifies whether content is sensational or neutral
-4. **Sentiment Analysis** - Analyzes emotional sentiment (positive, negative, neutral)
-5. **Reputation Classification** - Assesses reputation level (low, medium, high)
-6. **Stance Classification** - Detects political stance (against, neutral, favor)
-
-**Key Features:**
-- Sentence-level analysis with voting mechanism for final predictions
-- Complete end-to-end pipeline from text input to multi-model predictions
-- Integrated prediction function: `analyze_complete_article(article_text)`
-- Detailed results output with confidence scores and sentence-level breakdowns
-
-### RAG Practice.ipynb
-
-A Retrieval-Augmented Generation (RAG) system implementation for article analysis:
-
-**Components:**
-1. **Text Chunking** - Uses NLTK to segment articles into manageable chunks
-2. **Embedding Generation** - Creates vector embeddings using DistilBERT
-3. **Vector Storage** - Local storage of text chunks and their embeddings
-4. **Semantic Retrieval** - Cosine similarity-based retrieval for relevant context
-
-**Key Features:**
-- Query-based semantic search over article content
-- DistilBERT-based text embeddings for semantic understanding
-- Efficient retrieval of relevant text chunks for question answering
-
-## Installation
-
-### Prerequisites
 ```
-Python 3.8+
-PyTorch
-Transformers (Hugging Face)
-scikit-learn
-pandas
-numpy
-vaderSentiment
-nrclex
-nltk
-chromadb (optional, for RAG)
-sentence-transformers (optional, for RAG)
-```
+DSC180A-GroupNull/
+│
+├── data/
+│   ├── pl_train.csv
+│   ├── pl_val.csv
+│   ├── pl_test.csv
+│   ├── train_article.json
+│   ├── test_article.json
+│   ├── train2.tsv
+│   ├── test2.csv
+│   └── val2.tsv
+│
+├── predictive_models/
+│   ├── reputation_model/
+│   ├── stance_model/
+│   ├── Intent_Classification_Model.ipynb
+│   ├── News_Coverage_Model.ipynb
+│   ├── reputation_model.ipynb
+│   ├── Sensationalism.ipynb
+│   ├── Sentiment.ipynb
+│   └── stance_model.ipynb
+│
+├── streamlit_app/
+│   ├── app.py
+│   ├── .streamlit/
+│   └── requirements.txt
+│
+├── combined_pred_model.ipynb
+├── final_model.ipynb
+├── requirements.yml
+└── start_streamlit.sh
 
+```
 ### Setup Steps
 
 1. **Clone the repository**
@@ -67,57 +49,50 @@ cd DSC180A-GroupNull
 ```
 
 2. **Install required packages**
-
-For Combined_Model.ipynb:
-```bash
-pip install torch transformers scikit-learn pandas numpy vaderSentiment nrclex joblib
+```
+conda env create -f requirements.yml
+conda activate groupnull
 ```
 
-For RAG Practice.ipynb (additional):
-```bash
-pip install nltk chromadb sentence-transformers
-```
+### Dataset Overview
+This project uses multiple datasets for different components of the pipeline. Below is a clear explanation of each key file found inside the ```data/``` folder
 
-3. **Download large model files**
+- ```pl_train.csv```, ```pl_val.csv```, ```pl_test.csv```
+  
+  These files come from the LIAR-PLUS stance dataset, where each sentence is labeled with:
+  - support
+  - neutral
+  - deny
+  
+  These labels are used exclusively for training our stance prediction model located in:```predictive_models/stance_model/```
+  
+  The stance model learns to classify how a sentence relates to a claim (agree, neutral, or disagree).
 
-Due to GitHub file size limitations, download the following model weights from Google Drive:
+- ```train_article.json```, ```train_article.json```, ```train_article.json```
+  - This dataset contains full news articles with labels that we use to train and evaluate the generative agent.
+ 
+- ```train2.tsv```, ```test2.tsv```, ```val2.tsv```
+  - These files are used for training and evaluating the predictive components (e.g., sensationalism, sentiment, coverage, reputation).
 
-**Reputation Model Weights:**
-- 📥 [Download Link](https://drive.google.com/drive/folders/1XopQiNOQVu6t09uocvKyrS0BinZOU-QU?usp=drive_link)
-- Place `model.safetensors` in `reputation_model/`
+- ```scraper/``` Folder
+  - This folder contains additional article data collected through our custom scraping scripts.
+  - These articles are not currently part of the training pipeline, but they are included in the repository because:
+      - They can be used to augment model training in the future
+      - They provide more diverse real-world samples for testing
 
-**Stance Model Weights:**
-- 📥 [Download Link](https://drive.google.com/drive/folders/1uSrrbrkRLXkZimxUv_yDoOnm4f4E4MFj?usp=drive_link)
-- Place `model.safetensors` in `stance_model/`
 
-4. **Run the notebooks**
-```bash
-jupyter notebook Combined_Model.ipynb
-# or
-jupyter notebook "RAG Practice.ipynb"
-```
+  
+### 1. Running Individual Predictive Models
+Each predictive model is implemented in a standalone Jupyter notebook inside ```predictive_models/```.
 
-## Repository Structure
+To train or evaluate a model:
+1. Open the corresponding notebook
+2. Run all cells
+3. The notebook will:
+   - load LIAR-PLUS or processed data
+   - fine-tune a classifier
+   - evaluate (accuracy, F1, confusion matrix)
 
-```
-DSC180A-GroupNull/
-├── Combined_Model.ipynb          # Main unified analysis notebook (6 models)
-├── RAG Practice.ipynb            # RAG system for semantic retrieval
-├── Prediction_Model.ipynb        # Model prediction and evaluation
-├── reputation_model/             # Reputation analysis model files
-├── stance_model/                 # Stance detection model files
-├── train.tsv, test.tsv, valid.tsv, train2.tsv, test2.tsv, val2.tsv  # Datasets
-└── per_class_metrics.csv         # Model performance metrics
-```
 
-## Usage
 
-**For Combined Model Analysis:**
-Open `Combined_Model.ipynb` in Jupyter Notebook and run all cells. The notebook will load all 6 models and provide the `analyze_complete_article()` function for analyzing any article text.
 
-**For RAG System:**
-Open `RAG Practice.ipynb` to explore semantic retrieval and question-answering over article content using embeddings and similarity search.
-
-## License
-
-This project is developed for educational purposes as part of UC San Diego's Data Science curriculum.
