@@ -125,12 +125,17 @@ dependencies:
   - zstandard=0.23.0=py312h1a4646a_1
   - zstd=1.5.6=hfb09047_0
   - pip:
+      - aiohappyeyeballs==2.6.1
+      - aiohttp==3.13.2
+      - aiosignal==1.4.0
+      - altair==6.0.0
       - anyio==4.11.0
       - attrs==25.3.0
       - backoff==2.2.1
       - bcrypt==5.0.0
       - beautifulsoup4==4.13.4
       - bleach==6.2.0
+      - blinker==1.9.0
       - build==1.3.0
       - cachetools==6.2.1
       - chromadb==1.3.4
@@ -138,14 +143,20 @@ dependencies:
       - coloredlogs==15.0.1
       - contourpy==1.3.3
       - cycler==0.12.1
+      - datasets==4.4.1
       - defusedxml==0.7.1
+      - dill==0.4.0
       - durationpy==0.10
       - et-xmlfile==2.0.0
+      - evaluate==0.4.6
       - fastjsonschema==2.21.1
       - filelock==3.20.0
       - flatbuffers==25.9.23
       - fonttools==4.59.0
+      - frozenlist==1.8.0
       - fsspec==2025.10.0
+      - gitdb==4.0.12
+      - gitpython==3.1.45
       - google-ai-generativelanguage==0.6.15
       - google-api-core==2.28.1
       - google-api-python-client==2.187.0
@@ -153,6 +164,7 @@ dependencies:
       - google-auth-httplib2==0.2.1
       - google-genai==1.49.0
       - google-generativeai==0.8.5
+      - google-search-results==2.4.2
       - googleapis-common-protos==1.72.0
       - grpcio==1.76.0
       - grpcio-status==1.71.2
@@ -177,6 +189,9 @@ dependencies:
       - mistune==3.1.3
       - mmh3==5.2.0
       - mpmath==1.3.0
+      - multidict==6.7.0
+      - multiprocess==0.70.18
+      - narwhals==2.13.0
       - nbclient==0.10.2
       - nbconvert==7.16.6
       - nbformat==5.10.4
@@ -199,11 +214,14 @@ dependencies:
       - pandocfilters==1.5.1
       - pillow==11.3.0
       - posthog==5.4.0
+      - propcache==0.4.1
       - proto-plus==1.26.1
       - protobuf==5.29.5
+      - pyarrow==22.0.0
       - pyasn1==0.6.1
       - pyasn1-modules==0.4.2
       - pybase64==1.4.2
+      - pydeck==0.9.1
       - pyparsing==3.2.3
       - pypika==0.48.9
       - pyproject-hooks==1.2.0
@@ -220,14 +238,17 @@ dependencies:
       - scipy==1.16.3
       - seaborn==0.13.2
       - shellingham==1.5.4
+      - smmap==5.0.2
       - sniffio==1.3.1
       - soupsieve==2.7
+      - streamlit==1.52.0
       - sympy==1.14.0
       - tenacity==9.1.2
       - textblob==0.19.0
       - threadpoolctl==3.6.0
       - tinycss2==1.4.0
       - tokenizers==0.22.1
+      - toml==0.10.2
       - torch==2.9.0
       - transformers==4.57.1
       - typer==0.20.0
@@ -240,4 +261,6 @@ dependencies:
       - webencodings==0.5.1
       - websocket-client==1.9.0
       - websockets==15.0.1
+      - xxhash==3.6.0
+      - yarl==1.22.0
 prefix: /opt/miniconda3
