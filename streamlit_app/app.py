@@ -241,7 +241,7 @@ def load_sentiment_model():
             self.topic_sigma = topic_sigma
             
     df_tr = read_tsv(DATA_PATH + "train2.tsv")
-    df_va = read_tsv(DATA_PATH + "valid.tsv")
+    df_va = read_tsv(DATA_PATH + "val2.tsv")
     
     # Train artifacts
     train_texts = df_tr["statement"].fillna("").astype(str).tolist()
