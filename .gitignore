@@ -36,3 +36,4 @@ news-analyzer-app/frontend/build/
 news-analyzer-app/backend/__pycache__/
 news-analyzer-app/backend/*.log
 
+*.safetensors
