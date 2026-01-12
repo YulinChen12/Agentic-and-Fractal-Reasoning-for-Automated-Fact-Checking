@@ -316,18 +316,18 @@ def load_bert_models():
     
     # Reputation
     try:
-        rep_path = "./reputation_model"
+        rep_path = "./preditive_models/reputation_model"
         rep_model = DistilBertForSequenceClassification.from_pretrained(rep_path)
         rep_tok = DistilBertTokenizerFast.from_pretrained(rep_path)
         rep_model.to(device)
-        rep_model.config.id2label = {0: "high", 1: "low", 2: "medium"}
+        rep_model.config.id2label = {0: "high", 1: "medium", 2: "low"}
     except Exception as e:
         print(f"Reputation model error: {e}")
         rep_model, rep_tok = None, None
 
     # Stance
     try:
-        stance_path = "./stance_model"
+        stance_path = "./preditive_models/stance_model"
         stance_tok = AutoTokenizer.from_pretrained(stance_path)
         stance_model = AutoModelForSequenceClassification.from_pretrained(stance_path)
         stance_model.to(device)
