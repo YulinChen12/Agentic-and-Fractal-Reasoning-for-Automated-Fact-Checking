@@ -751,7 +751,7 @@ def run_agent(title, body):
     
     with st.spinner("Agent is thinking... (This may take a minute)"):
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-2.5-flash-lite",
             contents=final_prompt,
             config=config,
         )
