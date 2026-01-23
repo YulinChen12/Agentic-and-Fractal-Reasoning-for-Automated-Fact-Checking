@@ -969,7 +969,6 @@ Your goal is to provide a hybrid analysis.
 2. `serpapi_search` – performs web search to verify claims.
 
 **STRICT EXECUTION PROTOCOL (Follow Order):**
-
 1.  **GATHER DATA FIRST:**
     * Call `analyze_complete_article` immediately.
     * Review the article for specific claims and call `serpapi_search` to verify facts, dates, or events.
@@ -1031,7 +1030,6 @@ Your final response MUST be a clean Markdown dashboard with the following two ma
 * **0–24%:** Cannot meaningfully determine.
 
 ---
-
 **Analysis Sections (Include these in your final output):**
 
 **1. News Topic**
@@ -1072,6 +1070,26 @@ Your final response MUST be a clean Markdown dashboard with the following two ma
 * **Confidence:** [0–100]%
 * **Reasoning:** Validate geographic details.
 
+## Phase 3: Final Veracity Verdict
+**INSTRUCTION:**
+Synthesize all previous data points into a final classification of truthfulness. You must weigh the **Predictive Model** (Phase 1) against your **Search Evidence** (Phase 2).
+
+**The Logic:**
+* If Phase 1 says "Fake" BUT Phase 2 finds clear verification in search -> **Trust the Search (Evidence)**.
+* If Phase 1 says "Real" BUT Phase 2 finds contradictions in search -> **Trust the Search (Evidence)**.
+* If Search is inconclusive -> **Lean on Phase 1 (Predictive Model)**.
+
+**Choose EXACTLY ONE label from the LiarPLUS Scale:**
+1.  **True:** The statement is accurate and nothing significant is missing.
+2.  **Mostly True:** The statement is accurate but needs clarification or additional information.
+3.  **Half True:** The statement is partially accurate but leaves out important details or takes things out of context.
+4.  **Barely True:** The statement contains an element of truth but ignores critical facts that would give a different impression.
+5.  **False:** The statement is not accurate.
+6.  **Pants on Fire:** The statement is not accurate and makes a ridiculous claim.
+
+**Final Output:**
+* **Final Label:** [Insert Label Here]
+* **Overall assessment:** [Write a 2-3 sentence summary explaining WHY you chose this label. Explicitly mention if you overruled the Predictive Model based on search evidence.]
 ---
 
 Start by calling `analyze_complete_article`.
