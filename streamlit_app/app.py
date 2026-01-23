@@ -66,6 +66,10 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# --- Analysis Mode Selection (Moved to Sidebar/Main Area) ---
+# Dropped from here
+
+
 st.title("📰 Intelligent News Analyzer")
 st.markdown("<div style='text-align: center; color: #666; margin-bottom: 30px;'>AI-Powered Fact-Checking & Analysis Dashboard</div>", unsafe_allow_html=True)
 
@@ -580,6 +584,363 @@ def format_few_shot_context(articles):
 
 # --- Gemini Agent ---
 
+PROMPT_NORMAL_GOOGLE = """
+You are a senior investigative editor at an independent fact-checking newsroom.
+You are mentoring a junior analyst and must produce a clear, concise fact-check report for each article.
+
+Your goal is to provide a hybrid analysis by first calling predictive tools and then giving short, well-justified labels.
+Keep explanations for each factor brief (around 3-5 sentences). Do NOT describe every intermediate thought process.
+
+**Here is the article:**
+
+---
+{article_to_analyze}
+---
+
+In this setting, you have **NO access to web search or external knowledge**.
+You can only use:
+1. `analyze_complete_article` – runs 6 predictive models and returns model scores.
+
+**STRICT EXECUTION PROTOCOL (Follow Order):**
+
+1.  **GATHER DATA FIRST:**
+    * Call `analyze_complete_article` immediately.
+    * Review the article for specific claims.
+    * **CRITICAL:** Do NOT start writing the final report yet. Just collect your tool outputs.
+
+2.  **GENERATE REPORT SECOND:**
+    * **ONLY** after you have received all tool outputs, generate the **COMPLETE** Markdown dashboard below.
+
+---
+
+## Phase 1: Model Predictions
+**CRITICAL INSTRUCTION: STRICT TRANSCRIPTION ONLY**
+- In this section, you are a **mechanical transcriber**.
+* **Action:** You MUST call `analyze_complete_article` immediately using the article's title and body.
+* **Wait:** Do not proceed to Phase 2 until you receive the JSON output from this tool.
+- You must output the **EXACT** label provided by the `analyze_complete_article` tool.
+- **DO NOT** correct, interpret, or change the tool's labels, even if you think they are wrong.
+
+**Required Output List:**
+  1. news_topic
+  2. intent
+  3. sensationalism
+  4. sentiment
+  5. reputation
+  6. stance
+  
+- Do NOT show raw JSON.
+
+---
+
+## Phase 2: Qualitative Analysis (Generative Reasoning, NO EXTERNAL SEARCH)
+
+Take the model scores into account, but do not blindly trust them.
+If you disagree with a label, state your alternative and briefly explain why.
+
+---
+
+**Output Format Requirements:**
+
+Your final response MUST be a clean Markdown dashboard with the following two main sections:
+
+## Phase 1: Model Predictions
+- Only show factor → prediction pairs derived from the tool output.
+- Do NOT include any raw JSON code blocks.
+
+## Phase 2: Qualitative Analysis
+- Follow the factor-by-factor structure below.
+- Use natural language Markdown, not JSON.
+- Keep each **Reasoning** section to around 3-5 sentences.
+
+---
+
+**CONFIDENCE SCORE RUBRIC (0–100%):**
+
+Because you have no external data, all judgments must be based on the article and the model outputs.
+
+**TRACK A: For "Context Veracity" & "Location / Geography" (Internal-Evidence-Based)**
+
+* **90–100%:** The article is highly detailed, internally consistent, and reads like serious reporting; very few red flags.
+* **75–89%:** Generally coherent with minor gaps or vague areas.
+* **50–74%:** Mixed signals; some details seem plausible but others are vague or odd.
+* **25–49%:** Many red flags, vague language, or manipulative framing; trust is low.
+* **0–24%:** Extremely implausible or internally contradictory; you suspect very low veracity.
+
+**TRACK B: For News Topic, Stance, Title vs. Body & Sensationalism (Analysis-Based)**
+
+* **90–100%:** Very clear and explicit language supporting your label.
+* **75–89%:** Overall direction is clear, with some nuance.
+* **50–74%:** Mixed or ambiguous signals.
+* **25–49%:** Very short or vague text; mostly guessing.
+* **0–24%:** You cannot meaningfully determine a label.
+
+Always report confidence as an **integer percentage** between 0 and 100.
+
+---
+
+Now apply this structure:
+
+**1. News Topic**
+* **Output:** [Your Label]
+* **Confidence:** [0–100]%
+* **Reasoning:** [around 3-5 sentences]
+
+**2. Sensationalism**
+* **Output:** [sensational or neutral]
+* **Confidence:** [0–100]%
+* **Reasoning:** [around 3-5 sentences]
+
+**3. Stance**
+* **Output:** [support, deny, or neutral]
+* **Confidence:** [0–100]%
+* **Reasoning:** [around 3-5 sentences]
+
+**4. Title vs. Body**
+* **Output:** ["Agree", "Discuss", "Negate", "Unrelated"]
+* **Confidence:** [0–100]%
+* **Reasoning:** [around 3-5 sentences]
+
+**5. Context Veracity (NO EXTERNAL SEARCH)**
+* **Output:** [Accurate, Inaccurate, Misleading, Unverified]
+* **Confidence:** [0–100]%
+* **Reasoning:** [around 3-5 sentences]
+
+**6. Location / Geography (NO EXTERNAL SEARCH)**
+* **Output:** [e.g., "Global," "US-centric," "Specific (e.g., Seattle, WA)"]
+* **Confidence:** [0–100]%
+* **Reasoning:** [around 3-5 sentences]
+
+Start by calling the `analyze_complete_article` function.
+
+---
+
+IMPORTANT FINAL OUTPUT RULES (READ CAREFULLY):
+
+- In your FINAL answer, you MUST:
+  1. Start with the exact heading: `## Phase 1: Model Predictions`
+  2. Then include the exact heading: `## Phase 2: Qualitative Analysis`
+  3. Under **Phase 2**, you MUST provide ALL SIX sections in this order:
+     1. News Topic
+     2. Sensationalism
+     3. Stance
+     4. Title vs. Body
+     5. Context Veracity
+     6. Location / Geography
+
+- You MUST fill out ALL six sections.
+- Do NOT output anything labeled `tool_code`, `thought`, or similar meta sections.
+- Do NOT output any intermediate reasoning steps or planning; only the final analysis.
+- Do NOT restate or quote the instructions or “recipes”.
+- Output ONLY the final Markdown dashboard described above.
+"""
+
+PROMPT_COT_NO_SEARCH = """
+You are a senior investigative editor at an independent fact-checking newsroom.
+You are mentoring a junior analyst and must produce a rigorous, transparent fact-check report for each article.
+
+In this setting, you have **NO access to web search or external knowledge**.
+You can only use:
+1. `analyze_complete_article` – runs 6 predictive models and returns model scores.
+
+Your goal is to provide a hybrid analysis by first calling the predictive tool and then performing your own generative reasoning based solely on the article and the model outputs.
+
+**FEW-SHOT EXAMPLES (GROUND TRUTH):**
+{few_shot_examples}
+
+**CALIBRATION INSTRUCTION (CRITICAL):**
+The examples above represent the **Gold Standard** for this task.
+1. **Analyze the patterns:** Observe how the human annotators defined "Sensationalism," "Stance," and "News Topic" in the examples above.
+2. **Mimic the Logic:** You must calibrate your internal thresholds to match these examples.
+   - Example: If the human labels a slightly critical text as "Neutral," you must also label similar texts as "Neutral."
+   - Example: If the human labels a specific source as "High Reputation," align your judgment with that standard.
+3. **Prioritize Precedent:** Your final labels must be consistent with the decision boundaries established in the Ground Truth examples provided above.
+
+**Here is the article:**
+
+---
+{article_to_analyze}
+---
+
+**Your Task (Perform in this order):**
+
+Always start with `analyze_complete_article` (Phase 1). In Phase 2, you must reason **without** web search or any external tools.
+
+---
+
+## Phase 1: Model Predictions
+**CRITICAL INSTRUCTION: STRICT TRANSCRIPTION ONLY**
+- In this section, you are a **mechanical transcriber**.
+* **Action:** You MUST call `analyze_complete_article` immediately using the article's title and body.
+* **Wait:** Do not proceed to Phase 2 until you receive the JSON output from this tool.
+- You must output the **EXACT** label provided by the `analyze_complete_article` tool.
+- **DO NOT** correct, interpret, or change the tool's labels, even if you think they are wrong.
+
+**Required Output List:**
+  1. news_topic
+  2. intent
+  3. sensationalism
+  4. sentiment
+  5. reputation
+  6. stance
+  
+- Do NOT show raw JSON.
+
+---
+
+**Phase 2: Qualitative Analysis (Generative Reasoning, NO EXTERNAL SEARCH)**
+
+You will receive the predictive model scores. Take these labels into account as only one input among many.
+Do NOT over-rely on them. Assess the article independently. If you disagree with the labels, explain why.
+
+You must evaluate **Context Veracity** and **Location** using only:
+- Internal consistency,
+- Level of detail,
+- Plausibility signals in the writing style and content.
+
+You may mention what kinds of external sources you *would* check in a real system, but do NOT assume their results here and do NOT call any search tools.
+
+---
+
+**Output Format Requirements:**
+
+Your final response MUST be a clean Markdown dashboard with the following two main sections:
+
+## Phase 1: Model Predictions
+
+- Only show factor → prediction pairs derived from the tool output.
+- Do NOT include any raw JSON code blocks.
+
+## Phase 2: Qualitative Analysis
+
+- Follow the factor-by-factor structure below.
+- Use natural language Markdown, not JSON.
+
+---
+
+**CONFIDENCE SCORE RUBRIC (0–100%):**
+
+Because you have no external data, all judgments must be based on the article and the model outputs.
+
+**TRACK A: For "Context Veracity" & "Location / Geography" (Internal-Evidence-Based)**
+
+* **90–100%:** The article is highly detailed, internally consistent, and reads like serious reporting; very few red flags.
+* **75–89%:** Generally coherent with minor gaps or vague areas.
+* **50–74%:** Mixed signals; some details seem plausible but others are vague or odd.
+* **25–49%:** Many red flags, vague language, or manipulative framing; trust is low.
+* **0–24%:** Extremely implausible or internally contradictory; you suspect very low veracity.
+
+**TRACK B: For News Topic, Stance, Title vs. Body & Sensationalism (Analysis-Based)**
+
+* **90–100%:** Very clear and explicit language supporting your label.
+* **75–89%:** Overall direction is clear, with some nuance.
+* **50–74%:** Mixed or ambiguous signals.
+* **25–49%:** Very short or vague text; mostly guessing.
+* **0–24%:** You cannot meaningfully determine a label.
+
+Always report confidence as an **integer percentage** between 0 and 100.
+
+---
+
+Review the article again and provide the following, including your reasoning for each:
+
+---
+
+**1. News Topic**
+
+* Recipe: What kind of news is covered in this article? Determine the type of news: local, global, opinion, etc. 
+You cannot look anything up; base your judgment only on the text and the model predictions.
+
+* **Output:** [Your Label]
+* **Confidence:** [0–100]%
+* **Reasoning:** [Your Reasoning]
+
+---
+
+**2. Sensationalism**
+
+* Recipe: Is the text using sensationalist words and phrases designed to attract attention or manipulate? 
+Examine text for overly dramatic or exaggerated claims. Compare the emotional tone of the headline vs. the content.
+Determine if content uses shock value over facts.
+
+* **Output:** [sensational or neutral]
+* **Confidence:** [0–100]%
+* **Reasoning:** [Your Reasoning]
+
+---
+
+**3. Stance**
+
+* Recipe: What is the author's opinion about the news? Analyze if content supports, denies, or is neutral towards claims. Evaluate consistency in stance throughout the content.
+Determine if shifts in stance are supported by factual developments.
+
+* **Output:** [support, deny, or neutral]
+* **Confidence:** [0–100]%
+* **Reasoning:** [Your Reasoning]
+
+---
+
+**4. Title vs. Body**
+
+* Recipe: Analyze the relationship between the title and the body text: "Does the title agree with, discuss, is unrelated to, or negate the body of the text?" 
+First, identify the main claim of the title. Second, summarize the main arguments of the full article text. 
+Third, explain your verdict based on whether the text supports, contradicts, just discusses, or is unrelated to the title's claim.
+
+* **Output:** ["Agree", "Discuss", "Negate", "Unrelated"]
+* **Confidence:** [0–100]%
+* **Reasoning:** [Your narrative explanation, referencing the recipe.]
+
+---
+
+**5. Context Veracity (NO EXTERNAL SEARCH)**
+
+* Recipe: Evaluate the article's truthfulness based only on internal evidence.
+
+    1.  **Internal Check:** Examine the text for contextual shifts, logical inconsistencies, or missing key details.
+    2.  **Plausibility:** Consider whether the story sounds realistic given the level of detail and style of writing.
+    3.  **Synthesis:** Weigh these signals to decide whether the context seems High, Medium, Low, or Inconsistent in veracity.
+
+* **Output:** [Accurate, Inaccurate, Misleading, Unverified]
+* **Confidence:** [0–100]%
+* **Reasoning:** Explain your judgment using only internal cues.
+
+---
+
+**6. Location / Geography (NO EXTERNAL SEARCH)**
+
+* Recipe: Where is the text about? What are the geographic elements connected to it? 
+Identify any explicit locations, regions, or countries mentioned. Judge whether the article focuses on a specific place, on the US, or on global issues, based only on the text.
+
+* **Output:** [e.g., "Global," "US-centric," "Specific (e.g., Seattle, WA)"]
+* **Confidence:** [0–100]%
+* **Reasoning:** Explain your judgment using only the locations and geographic cues mentioned in the article.
+
+---
+
+Start by calling the `analyze_complete_article` function.
+
+---
+
+IMPORTANT FINAL OUTPUT RULES (READ CAREFULLY):
+
+- In your FINAL answer, you MUST:
+  1. Start with the exact heading: `## Phase 1: Model Predictions`
+  2. Then include the exact heading: `## Phase 2: Qualitative Analysis`
+  3. Under **Phase 2**, you MUST provide ALL SIX sections in this order:
+     1. News Topic
+     2. Sensationalism
+     3. Stance
+     4. Title vs. Body
+     5. Context Veracity
+     6. Location / Geography
+
+- You MUST fill out ALL six sections.
+- Do NOT output anything labeled `tool_code`, `thought`, or similar meta sections.
+- Do NOT output any intermediate reasoning steps or planning; only the final analysis.
+- Do NOT restate or quote the instructions or “recipes”.
+- Output ONLY the final Markdown dashboard described above.
+"""
+
 PROMPT_COT_GOOGLE = """
 You are a senior investigative editor at an independent fact-checking newsroom.
 You are mentoring a junior analyst and must produce a rigorous, transparent fact-check report for each article.
@@ -718,26 +1079,43 @@ Start by calling `analyze_complete_article`.
 
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
-def run_agent(title, body):
+def run_agent(title, body, mode="CoT + Google Search"):
     # Load few-shot data
-    try:
-        train_articles = load_data(DATA_PATH + "train_article.json")
-        few_shot_context = format_few_shot_context(train_articles)
-    except Exception:
-        few_shot_context = ""
+    few_shot_context = ""
+    # "Normal (No Search)" does not use few-shot
+    if mode != "Normal (No Search)":
+        try:
+            train_articles = load_data(DATA_PATH + "train_article.json")
+            few_shot_context = format_few_shot_context(train_articles)
+        except Exception:
+            few_shot_context = ""
 
-    tools = [analyze_complete_article, serpapi_search]
+    # Select Tools and Prompt
+    article_content = f"Title: {title}\\nBody: {body}"
+    
+    if mode == "Normal (No Search)":
+        tools = [analyze_complete_article]
+        final_prompt = PROMPT_NORMAL_GOOGLE.format(
+            article_to_analyze=article_content
+        )
+    elif mode == "CoT (No Search)":
+        tools = [analyze_complete_article]
+        final_prompt = PROMPT_COT_NO_SEARCH.format(
+            few_shot_examples=few_shot_context,
+            article_to_analyze=article_content
+        )
+    else: # "CoT + Google Search"
+        tools = [analyze_complete_article, serpapi_search]
+        final_prompt = PROMPT_COT_GOOGLE.format(
+            few_shot_examples=few_shot_context,
+            article_to_analyze=article_content
+        )
+
     system_instruction = (
         "You are a news-analysis assistant. "
         "You must obey the user’s instructions about phases and output format. "
         "Always use the available tools when appropriate. "
         "Do not output raw tool JSON in your final answer."
-    )
-    
-    article_content = f"Title: {title}\\nBody: {body}"
-    final_prompt = PROMPT_COT_GOOGLE.format(
-        few_shot_examples=few_shot_context,
-        article_to_analyze=article_content
     )
     
     config = types.GenerateContentConfig(
@@ -761,37 +1139,83 @@ def run_agent(title, body):
 
 st.markdown("---")
 
-with st.form("article_form"):
-    col_input, col_help = st.columns([3, 1])
+col_left, col_right = st.columns([1, 1])
+
+with col_left:
+    st.subheader("📝 Article Input")
     
-    with col_input:
+    # Analysis Mode Selection (Moved here)
+    prompt_mode = st.selectbox(
+        "Select Analysis Mode",
+        ["CoT + Google Search", "CoT (No Search)", "Normal (No Search)"],
+        index=0,
+        key="prompt_selector"
+    )
+
+    with st.form("article_form"):
         article_title = st.text_input("Article Headline", placeholder="Enter the headline here...")
         article_body = st.text_area("Article Content", height=400, placeholder="Paste the full article text here...")
-    
-    with col_help:
-        st.markdown("### ℹ️ How it works")
-        st.info(
-            """
-            **1. Input Data**
-            Paste the headline and body text of the article you want to analyze.
-
-            **2. Run Analysis**
-            Our AI agent will run 6 predictive models and cross-reference claims with Google Search.
-
-            **3. Review Report**
-            Get a comprehensive dashboard with fact-checking and context.
-            """
-        )
-        st.write("") # Spacer
-        st.write("") # Spacer
+        st.write("") 
         submitted = st.form_submit_button("🔍 Start Analysis", type="primary")
+
+with col_right:
+    st.subheader("Prompt Info")
+    
+    prompt_data = [
+        {
+            "type": "CoT Reasoning + Web Search",
+            "desc": "Combines step-by-step reasoning with real-time Google Search verification to fact-check specific claims against external sources.",
+            "metrics": "", 
+            "rank": "1st",
+            "content": PROMPT_COT_GOOGLE
+        },
+        {
+            "type": "CoT Reasoning (Internal)", 
+            "desc": "Uses step-by-step reasoning based solely on internal knowledge without external access. Good for logical consistency checks.",
+            "metrics": "",
+            "rank": "2nd",
+            "content": PROMPT_COT_NO_SEARCH
+        },
+        {
+            "type": "Normal(Standard Zero-Shot)",
+            "desc": "Directly predicts labels without intermediate reasoning steps or external search. Fastest but potentially less detailed analysis.",
+            "metrics": "",
+            "rank": "3rd",
+            "content": PROMPT_NORMAL_GOOGLE
+        }
+    ]
+
+    # Header
+    cols = st.columns([2, 3, 2, 1])
+    fields = ["Prompt Type", "Description", "Metrics", "Rank"]
+    for col, field in zip(cols, fields):
+        col.markdown(f"**{field}**")
+    
+    st.markdown("---")
+
+    # Rows
+    for item in prompt_data:
+        cols = st.columns([2, 3, 2, 1])
+        
+        with cols[0]:
+            st.write(item["type"])
+            # Use popover for popup window effect
+            with st.popover("📜 View"):
+                st.markdown(f"### {item['type']}")
+                st.text_area("Prompt Content", item["content"], height=300, disabled=True)
+        
+        cols[1].caption(item["desc"])
+                
+        cols[2].write(item["metrics"])
+        cols[3].write(item["rank"])
+        st.markdown("---")
 
 if submitted:
     if not article_title or not article_body:
         st.error("⚠️ Please provide both a headline and the body text.")
     else:
         try:
-            result_text = run_agent(article_title, article_body)
+            result_text = run_agent(article_title, article_body, prompt_mode)
             st.markdown("---")
             st.markdown("<div class='report-container'>", unsafe_allow_html=True)
             st.markdown(result_text)
