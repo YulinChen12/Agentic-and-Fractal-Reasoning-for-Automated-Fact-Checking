@@ -129,7 +129,7 @@
       "reputation": "Low",
       "stance": "Against",
       "title_vs_body": "Agree",
-      "context_veracity": "False",
+      "context_veracity": "Inaccurate",
       "location": "United States / China"
     },
 
@@ -282,7 +282,7 @@
       "reputation": "High",
       "stance": "Neutral",
       "title_vs_body": "Agree",
-      "context_veracity": "Accurate",
+      "context_veracity": "Unverified",
       "location": "United States"
     },
 
@@ -301,7 +301,7 @@
       "reputation": "Medium",
       "stance": "Against",
       "title_vs_body": "Agree",
-      "context_veracity": "Accurate",
+      "context_veracity": "Inaccurate",
       "location": "Vatican City"
     },
 
