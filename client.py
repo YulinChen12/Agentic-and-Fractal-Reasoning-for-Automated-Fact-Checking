@@ -4,7 +4,7 @@ from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
 from google.adk.runners import InMemoryRunner
 
 # %%
-YOUR_IP = "100.117.24.250"
+YOUR_IP = "100.113.87.135"
 AGENT_CARD_URL = f"http://{YOUR_IP}:8000/.well-known/agent-card.json"
 
 remote_coordinator = RemoteA2aAgent(
