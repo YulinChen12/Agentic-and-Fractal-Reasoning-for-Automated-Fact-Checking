@@ -39,3 +39,9 @@ news-analyzer-app/backend/*.log
 *.safetensors
 *.ipynb
 
+
+
+# model artifacts
+artifacts/
+*.joblib
+.conda/
