@@ -1,5 +1,8 @@
 # DSC180A-GroupNull: Misinformation Detection System
 
+# DO NOT MAKE IT PUBLIC
+- API Keys were in the commit history.
+  
 ## Project Overview
 
 A hybrid misinformation detection framework that combines:
