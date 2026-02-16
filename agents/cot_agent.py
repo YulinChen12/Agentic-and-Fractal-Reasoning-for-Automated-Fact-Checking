@@ -66,7 +66,7 @@ COLS = ["id","label","statement","subjects","speaker","job_title",
         "state_info","party_affiliation","barely_true_cnt","false_cnt",
         "half_true_cnt","mostly_true_cnt","pants_on_fire_cnt","context","justification"]
 
-data_path = './data/'
+data_path = '../pred_data/'
 
 def read_tsv(path):
     """Load TSV data with proper handling of quotes and escape characters"""
@@ -202,6 +202,8 @@ def evidence_anchors(text):
 
 tfidf = TfidfVectorizer(max_features=3000, stop_words='english', ngram_range=(1,2))
 train_text = df_tr['statement'].astype(str) + " " + df_tr['context'].astype(str)
+train_text = train_text.fillna("").astype(str)
+
 
 X_train_tfidf = tfidf.fit_transform(train_text)
 
@@ -293,7 +295,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
 try:
-    stance_model_path = "./preditive_models/stance_model"
+    stance_model_path = "../pred_models_training/stance_model"
     stance_tokenizer = AutoTokenizer.from_pretrained(stance_model_path)
     stance_model = AutoModelForSequenceClassification.from_pretrained(stance_model_path)
     stance_model.to(device)
@@ -427,7 +429,7 @@ def tool_stance(article_text: str) -> dict:
     except:
         return {"stance": "neutral"}
 # %%
-os.environ["GOOGLE_API_KEY"] = "AIzaSyB1G69vygim6hTtn8KxYXP-3wlTfNNGNIU"
+
 os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "FALSE"
 
 retry_config=types.HttpRetryOptions(
