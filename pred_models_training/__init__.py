@@ -1,4 +1,4 @@
-from .preditive_models_training.predictors import (
+from .predictors import (
     predict_news_coverage,
     predict_intent,
     predict_sensationalism,

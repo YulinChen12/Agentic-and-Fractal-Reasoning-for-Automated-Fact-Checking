@@ -40,7 +40,7 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import nltk
 from nltk.tokenize import sent_tokenize
 
-from preditive_models_training.predictors import (
+from .predictors import (
     read_tsv,
     text_of,
     extract_sentiment_features_from_statement,

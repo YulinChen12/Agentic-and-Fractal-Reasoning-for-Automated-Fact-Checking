@@ -45,3 +45,6 @@ news-analyzer-app/backend/*.log
 artifacts/
 *.joblib
 .conda/
+
+final_model.ipynb
+combined_pred_model.ipynb

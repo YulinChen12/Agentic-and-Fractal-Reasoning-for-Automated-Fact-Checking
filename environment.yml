@@ -1,0 +1,17 @@
+name: dsc180
+channels:
+  - https://repo.anaconda.com/pkgs/main
+  - https://repo.anaconda.com/pkgs/r
+dependencies:
+  - python=3.12
+  - ipykernel
+  - torchaudio
+  - pytorch
+  - torchvision
+  - nltk
+  - scipy
+  - scikit-learn
+  - numpy
+  - pandas
+  - cpuonly
+prefix: /opt/miniconda3/envs/dsc180
