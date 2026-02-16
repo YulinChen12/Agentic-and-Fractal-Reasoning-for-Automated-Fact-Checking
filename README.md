@@ -2,43 +2,51 @@
 
 ## Project Overview
 
-This repository contains the full implementation of our DSC 180A capstone project: a hybrid  misinformation detection pipeline combining predictive models with a grounded LLM (Gemini 2.5 Flash). The system extracts stance, sentiment, sensationalism, reputation, and news-coverage features from input articles and integrates them into a multi-step reasoning agent for credibility analysis.
+A hybrid misinformation detection framework that combines:
+- Predictive ML models (stance, sentiment, sensationalism, reputation, topic, intent)
+- Agent-based reasoning using Gemini (Chain-of-Thought & Fractal CoT)
+- Optional web-grounded verification
+- Streamlit interface for interactive testing
+
+The system extracts structured credibility signals from an article and integrates them into a multi-step reasoning pipeline for final credibility analysis.
 
 ## Repository Structure
 
 ```
 DSC180A-GroupNull/
 │
-├── data/
+├── agents/
+│   ├── cot_agent.py
+│   ├── fcot_agent.py
+│
+├── artifacts/                  # Generated after training (NOT uploaded)
+│
+├── gen_data/
+│   ├── train_article.json
+│   ├── test_article.json
+│
+├── pred_data/
 │   ├── pl_train.csv
 │   ├── pl_val.csv
 │   ├── pl_test.csv
-│   ├── train_article.json
-│   ├── test_article.json
 │   ├── train2.tsv
-│   ├── test2.csv
-│   └── val2.tsv
+│   ├── val2.tsv
+│   ├── test2.tsv
 │
-├── predictive_models/
-│   ├── reputation_model/
+├── pred_models_training/
+│   ├── predictors.py
+│   ├── train_all.py
 │   ├── stance_model/
-│   ├── Intent_Classification_Model.ipynb
-│   ├── News_Coverage_Model.ipynb
-│   ├── reputation_model.ipynb
-│   ├── Sensationalism.ipynb
-│   ├── Sentiment.ipynb
-│   └── stance_model.ipynb
+│   ├── reputation_model/
 │
 ├── streamlit_app/
 │   ├── app.py
-│   ├── .streamlit/
-│   └── requirements.txt
 │
-├── combined_pred_model.ipynb
-├── final_model.ipynb
-├── requirements.yml
+├── pred_article.py             # Run predictive pipeline on an article
+├── client.py                   # Client for exposed CoT agent
+├── environment.yml
+├── requirements.txt
 └── start_streamlit.sh
-
 ```
 ### Setup Steps
 
@@ -54,19 +62,35 @@ git clone https://github.com/YulinChen12/DSC180A-GroupNull.git
 cd DSC180A-GroupNull
 ```
 
-3. **Install required packages using Conda**
+3. **Create Environment**
 ```
-conda env create -f requirements.yml
-conda activate groupnull
+conda env create -f environment.yml
+conda activate dsc180
 ```
+OR
+
+```
+pip install -r requirements.txt
+```
+
 4. **Ensure Git LFS is installed and pull large files**
 ```
 git lfs install
 git lfs pull
 ```
 
+**IMPORTANT: Some Model Artifacts Are NOT Included**
+
+Large trained model files are NOT uploaded due to GitHub size limits. You must generate them locally.
+
+Generate Predictive Model Artifacts
+From the repo root, run:
+```
+python -m pred_models_training.train_all
+```
+
 ### Dataset Overview
-This project uses multiple datasets for different components of the pipeline. Below is a clear explanation of each key file found inside the ```data/``` folder
+This project uses multiple datasets for different components of the pipeline. Below is a clear explanation of each key file found inside the ```pred_data/``` folder
 
 - ```pl_train.csv```, ```pl_val.csv```, ```pl_test.csv```
   
@@ -75,71 +99,82 @@ This project uses multiple datasets for different components of the pipeline. Be
   - neutral
   - deny
   
-  These labels are used exclusively for training our stance prediction model located in:```predictive_models/stance_model/```
+  These labels are used exclusively for training our stance prediction model located in:```pred_model_training/stance_model/```
   
   The stance model learns to classify how a sentence relates to a claim (agree, neutral, or disagree).
-
-- ```train_article.json```, ```train_article.json```, ```train_article.json```
-  - This dataset contains full news articles with labels that we use to train and evaluate the generative agent.
  
 - ```train2.tsv```, ```test2.tsv```, ```val2.tsv```
   - These files are used for training and evaluating the predictive components (e.g., sensationalism, sentiment, coverage, reputation).
 
-- ```scraper/``` Folder
-  - This folder contains additional article data collected through our custom scraping scripts.
-  - These articles are not currently part of the training pipeline, but they are included in the repository because:
-      - They can be used to augment model training in the future
-      - They provide more diverse real-world samples for testing
-
+- ```train_article.json```, ```test_article.json```, ```test_article_no_label.json```
+  - This dataset contains full news articles with labels that we use to train and evaluate the generative agent.
 
   
-### 1. Running Individual Predictive Models
-Each predictive model is implemented in a standalone Jupyter notebook inside ```predictive_models/```.
+## 1. Running Predictive Pipeline Only
+After training, you can place a news article into this file to test: 
+```
+python pred_article.py
+```
+It will output the following:
+```
+=== Predictions ===
+factor           label         conf
+--------------------------------------
+news_coverage    ...
+intent           ...
+sensationalism   ...
+sentiment        ...
+reputation       ...
+stance           ...
 
-To train or evaluate a model:
-1. Open the corresponding notebook
-2. Run all cells
-3. The notebook will:
-   - load LIAR-PLUS or processed data
-   - fine-tune a classifier
-   - evaluate (accuracy, F1, confusion matrix)
+```
+
+## 2.Agent Framework
+Make sure you have a AI Studio API key to run the agents!
+
+Set them in the py files:
+```
+os.environ["GOOGLE_API_KEY"] =YOUR_KEY
+```
+This project includes two reasoning agents:
+
+### 1. CoT Agent (```cot_agent.py```)
+- Standard Chain-of-Thought reasoning
+- Can be exposed on a shared IP
+- Designed for live API-style usage
   
-
-### 2. Combined Predictive Feature Pipeline
-The notebook ```combined_pred_model.ipynb``` runs an input article through all predictive models and produces:
-
+To run:
 ```
-{
-  "stance": "...",
-  "reputation": "...",
-  "sensationalism": "...",
-  "sentiment": "...",
-  "coverage": "..."
-}
+python agents/cot_agent.py
 ```
 
-This structured output becomes the input to the agentic LLM reasoning layer.
+Then test using:
+```
+python client.py
+```
+
+All machines using the same IP can call this agent once it's running.
+
+### 2. FCoT Agent (```fcot_agent.py```)
+- Fractal Chain-of-Thought reasoning
+- Multi-agent architecture
+- Parallel factor analysts
+-  Context-grounded verification
+  
+To run:
+```
+python agents/fcot_agent.py
+```
+
+Then test using:
+```
+python client.py
+```
+
+All machines using the same IP can call this agent once it's running.
 
 
-### 3. Final Hybrid Agentic Model
-The notebook ```final_model.ipynb``` is the experimental notebook where we combine the final predictive feature pipeline (stance, sensationalism, sentiment, reputation, coverage, intent) and the Gemini Flash generative model to evaluate how different prompting strategies affect misinformation classification quality.
-
-This notebook runs three structured experiments:
-
-- **Experiment 1 — Zero-Shot Prompting**
-
-    - Gemini Flash receives only the article text and predictive model labels and is asked to produce a credibility assessment without any examples or reasoning demonstrations. This serves as our baseline agent performance.
-
-- **Experiment 2 — Few-Shot + Chain-of-Thought Prompting**
-
-  - Here we build onto the baseline agent, and add 7 labeled examples with a recipe for reasoning. This experiment tests whether explicit examples and step-by-step reasoning improve the model’s accuracy and explanation quality.
-
-- **Experiment 3 — Few-Shot Chain-of-Thought + Web Search (SERP API)**
-
-  - The third experiment extends Experiment 2 by adding live web search retrieval via SERP API.
-
-
-### 5. Running the Streamlit App
+### 3. Running the Streamlit App
 The Streamlit web interface is located in ```streamlit_app/app.py```
 
 Start Using Provided Script in your terminal
