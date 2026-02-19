@@ -66,15 +66,18 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 ARTIFACT_DIR = os.path.join(_THIS_DIR, "artifacts")
 
 TOPIC_ARTIFACT = os.path.join(ARTIFACT_DIR, "topic_pipeline.joblib")
-INTENT_ARTIFACT = os.path.join(ARTIFACT_DIR, "intent_pipeline.joblib")
-SENS_ARTIFACT = os.path.join(ARTIFACT_DIR, "sens_mlp.joblib")
-SENTIMENT_ARTIFACT = os.path.join(ARTIFACT_DIR, "sentiment_mlp.joblib")
+INTENT_ARTIFACT = os.path.join(ARTIFACT_DIR, "intent_proto.joblib")
+SENS_ARTIFACT = os.path.join(ARTIFACT_DIR, "sens_svc.joblib")
+SENTIMENT_ARTIFACT = os.path.join(ARTIFACT_DIR, "sentiment_rf.joblib")
+
+# Step up one level from pred_models_training to get the root project directory
+ROOT_DIR = os.path.dirname(_THIS_DIR)
 
 DEFAULT_REPUTATION_MODEL_DIR = os.environ.get(
-    "REPUTATION_MODEL_DIR", "./reputation_model"
+    "REPUTATION_MODEL_DIR", os.path.join(ROOT_DIR, "pred_models_training", "reputation_model")
 )
 DEFAULT_STANCE_MODEL_DIR = os.environ.get(
-    "STANCE_MODEL_DIR", "./stance_model"
+    "STANCE_MODEL_DIR", os.path.join(ROOT_DIR, "pred_models_training", "stance_model")
 )
 
 # ---------------------------
@@ -278,42 +281,76 @@ def predict_news_coverage(article_text: str) -> Dict:
 
 def predict_intent(title: str = "", body: str = "") -> Dict:
     _ensure_intent()
-    text = (title or "").strip() + "\n\n" + (body or "").strip()
-    label = _INTENT_PIPELINE.predict([text])[0]
-    conf = None
-    try:
-        scores = _INTENT_PIPELINE.decision_function([text])[0]
-        ex = np.exp(scores - np.max(scores))
-        conf = float(np.max(ex / np.sum(ex)))
-    except Exception:
-        conf = None
-    return {"label": label, "confidence": conf, "meta": {"model": "LinearSVC+TFIDF"}}
+    
+    # _INTENT_PIPELINE is actually a dictionary from train_all.py
+    vectorizer = _INTENT_PIPELINE["vectorizer"]
+    proto_mat = _INTENT_PIPELINE["proto_mat"]
+    class_names = _INTENT_PIPELINE["class_names"]
+
+    text = (title or "").strip() + " " + (body or "").strip()
+    
+    # Transform text and normalize
+    z = vectorizer.transform([text])
+    from sklearn.preprocessing import normalize
+    zn = normalize(z, norm="l2", axis=1)
+    
+    # Calculate cosine similarity against the prototypes
+    scores = (zn @ proto_mat.T).ravel()
+    
+    # Find the highest scoring intent
+    best_idx = int(np.argmax(scores))
+    label = class_names[best_idx]
+    conf = float(scores[best_idx])
+    
+    return {"label": label, "confidence": conf, "meta": {"model": "TFIDF+Prototypes"}}
 
 def predict_sensationalism(statement: str, justification: str = "") -> Dict:
     """
-    Notebook uses MLP on engineered features.
-    Artifact is a dict: {"scaler": ..., "clf": ..., "cols": [...]}
+    Predicts sensationalism using the trained SVC pipeline.
+    Artifact dict expects: {"tfidf": ..., "model": ..., "evidence_patterns": ...}
     """
     _ensure_sens()
-    scaler = _SENS_MLP["scaler"]
-    clf = _SENS_MLP["clf"]
-    cols = _SENS_MLP["cols"]
-    # features from statement + justification + anchors
-    combined = (statement or "") + " " + (justification or "")
-    feats = extract_sentiment_features_from_statement(combined)
-    anchors = evidence_anchors(combined)
-    feats.update({f"anchor_{k}": float(v) for k, v in anchors.items()})
-    df = pd.DataFrame([feats]).fillna(0.0)
-    for c in cols:
-        if c not in df.columns:
-            df[c] = 0.0
-    X = df[cols].to_numpy(dtype=np.float32)
-    X = scaler.transform(X)
-    label = clf.predict(X)[0]
+    
+    # Load the specific artifacts saved by train_all.py
+    tfidf = _SENS_MLP["tfidf"]
+    model = _SENS_MLP["model"]
+    ev_patterns = _SENS_MLP.get("evidence_patterns", [])
+
+    # Combine text (matches train_all.py: statement + " " + context)
+    combined_text = str(statement or "") + " " + str(justification or "")
+
+    # Extract TF-IDF features
+    X_tfidf = tfidf.transform([combined_text])
+
+    # Calculate evidence anchor density exactly as train_all.py does
+    s = str(statement or "")
+    token_re = re.compile(r"[A-Za-z]+")
+    ev_re = [re.compile(p, flags=re.I) for p in ev_patterns]
+
+    hits = sum(len(r.findall(s)) for r in ev_re)
+    toks = max(1, len(token_re.findall(s)))
+    dens = np.log1p(hits) / max(10, toks)
+    ev_score = float(np.clip(dens, 0.0, 0.2))
+
+    X_ev = np.array([[ev_score]])
+
+    # Combine features using hstack (Scipy Sparse Matrix)
+    X = hstack([X_tfidf, X_ev])
+
+    # Predict (model outputs 1 for sensational, 0 for neutral based on your THRESHOLD)
+    pred_val = model.predict(X)[0]
+    label = "sensational" if pred_val == 1 else "neutral"
+
+    # Get Confidence Score
     conf = None
-    if hasattr(clf, "predict_proba"):
-        conf = float(np.max(clf.predict_proba(X)[0]))
-    return {"label": label, "confidence": conf, "meta": {"model": "MLP+features"}}
+    if hasattr(model, "predict_proba"):
+        conf = float(np.max(model.predict_proba(X)[0]))
+
+    return {
+        "label": label, 
+        "confidence": conf, 
+        "meta": {"model": "SVC+TFIDF+Anchors"}
+    }
 
 def predict_sentiment(statement: str) -> Dict:
     """
