@@ -1,436 +1,163 @@
-# %%
-# pip install pandas numpy scikit-learn torch transformers nrclex vaderSentiment
-import nltk
-nltk.download('punkt_tab')
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
-
-# %%
-# Core imports
-import pandas as pd
-import numpy as np
-import re
-import csv
-import torch
-import time
+import os
+import sys
 import warnings
+from collections import Counter
+import nltk
+from dotenv import load_dotenv
+
+# -------------------------------------------------------------------------
+# PATH CONFIGURATION
+# -------------------------------------------------------------------------
+# Get the absolute path of the current file (agents/cot_agent.py)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Get the parent directory (project_root)
+parent_dir = os.path.dirname(current_dir)
+# Construct path to sibling directory (pred_models_training)
+predictors_dir = os.path.join(parent_dir, 'pred_models_training')
+
+# Add to sys.path so Python can find predictors.py
+if predictors_dir not in sys.path:
+    sys.path.append(predictors_dir)
+
+# -------------------------------------------------------------------------
+# IMPORTS
+# -------------------------------------------------------------------------
+# ADK Imports
+from google.adk.agents import Agent
+from google.adk.tools import AgentTool, google_search
+from google.adk.models.google_llm import Gemini
+from google.adk.a2a.utils.agent_to_a2a import to_a2a
+from google.genai import types
+import uvicorn
+
+# Predictors API
+try:
+    from predictors import (
+        predict_news_coverage,
+        predict_intent,
+        predict_sensationalism,
+        predict_article_stance,
+        analyze_complete_article
+    )
+    print(f"✅ Successfully imported predictors from {predictors_dir}")
+except ImportError as e:
+    print(f"❌ Failed to import predictors: {e}")
+    print(f"   Current sys.path: {sys.path}")
+    raise e
+
 warnings.filterwarnings("ignore")
 
-# ML and NLP imports
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.svm import SVC
-from scipy.sparse import hstack, csr_matrix
-from sklearn.pipeline import Pipeline
-from sklearn.svm import LinearSVC
-from sklearn.utils.class_weight import compute_class_weight
-from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import normalize, StandardScaler, LabelEncoder
-from sklearn.linear_model import LogisticRegression
-from sklearn.neural_network import MLPClassifier
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.decomposition import LatentDirichletAllocation
-from sentence_transformers import SentenceTransformer
-
-# Transformers
-from transformers import DistilBertForSequenceClassification, DistilBertTokenizerFast, AutoTokenizer, AutoModelForSequenceClassification
-import torch.nn.functional as F
-
-# Sentiment and emotion analysis
-from nrclex import NRCLex
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-
-import os
-from google import genai
-from google.genai import types
-import json
-import requests
-import uuid
-from collections import Counter
-
-print("All imports loaded successfully!")
-
-# %%
-from google.adk.agents import Agent, SequentialAgent, ParallelAgent, LoopAgent
-from google.adk.models.google_llm import Gemini
-from google.adk.runners import InMemoryRunner
-from google.adk.tools import AgentTool, FunctionTool, google_search
-
-from google.adk.a2a.utils.agent_to_a2a import to_a2a
-
-print("✅ ADK components imported successfully.")
-
-# %%
-# Data loading and preprocessing functions
-COLS = ["id","label","statement","subjects","speaker","job_title",
-        "state_info","party_affiliation","barely_true_cnt","false_cnt",
-        "half_true_cnt","mostly_true_cnt","pants_on_fire_cnt","context","justification"]
-
-data_path = '../pred_data/'
-
-def read_tsv(path):
-    """Load TSV data with proper handling of quotes and escape characters"""
-    return pd.read_csv(path, sep="\t", header=None, names=COLS,
-                       engine="python", quoting=csv.QUOTE_NONE, escapechar="\\",
-                       on_bad_lines="skip")
-
-def text_of(r):
-    """Combine statement, context, and justification into single text"""
-    return " ".join([str(r.get("statement","")), str(r.get("context","")), str(r.get("justification",""))]).strip()
-
-def first_subject(s):
-    """Extract first subject from subjects field"""
-    parts = re.split(r"[;,]", s) if isinstance(s,str) else []
-    return parts[0].strip().lower() if parts and parts[0].strip() else "unknown"
-
-print("Data loading functions defined!")
-
-# %%
-# Model 1: News Coverage Classification
-print("Loading News Coverage Model...")
-
-# Load training data
-df_tr = read_tsv(data_path + "train2.tsv")
-df_va = read_tsv(data_path + "val2.tsv")
-
-X_tr = df_tr.apply(text_of, axis=1)
-X_va = df_va.apply(text_of, axis=1)
-
-y_tr = df_tr["subjects"].apply(first_subject)
-y_va = df_va["subjects"].apply(first_subject)
-
-keep = y_tr.ne("unknown")
-X_tr, y_tr = X_tr[keep], y_tr[keep]
-
-classes = np.unique(y_tr)
-weights = compute_class_weight(class_weight="balanced", classes=classes, y=y_tr)
-wmap = {c:w for c,w in zip(classes, weights)}
-
-# Train news coverage pipeline
-news_coverage_pipe = Pipeline([
-    ("tfidf", TfidfVectorizer(lowercase=True, strip_accents="unicode",
-                              analyzer="word", ngram_range=(1,2),
-                              min_df=2, max_df=0.9, sublinear_tf=True)),
-    ("clf", LinearSVC(class_weight=wmap, random_state=42))
-])
-
-news_coverage_pipe.fit(X_tr, y_tr)
-pred = news_coverage_pipe.predict(X_va)
-print(f"News Coverage Model - Accuracy: {accuracy_score(y_va, pred):.4f}")
-
-def predict_news_coverage(text):
-    """Predict news coverage topic for given text"""
-    prediction = news_coverage_pipe.predict([text])[0]
-    return {"topic": str(prediction)}
-
-# %%
-# Model 2: Intent Classification
-print("Loading Intent Classification Model...")
-
-# Load and prepare data
-df = read_tsv(data_path + "train2.tsv")
-for c in ["statement","context","justification"]:
-    df[c] = df[c].fillna("").astype(str).str.strip()
-
-texts = df.apply(text_of, axis=1).tolist()
-
-# Train TF-IDF vectorizer
-intent_tfidf = TfidfVectorizer(
-    lowercase=True, strip_accents="unicode",
-    analyzer="word", ngram_range=(1,2),
-    min_df=3, max_df=0.95, sublinear_tf=True
-)
-X = intent_tfidf.fit_transform(texts)
-
-# Define prototypes for each intent
-PROTOS = {
-  "inform":   ["Officials said the department released a report with data and timelines."],
-  "persuade": ["We should support this policy because it will improve outcomes."],
-  "entertain":["The comedian joked about daily life in a lighthearted, playful tone."],
-  "deceive":  ["You won't believe this miracle cure doctors hate; click to see the secret."]
-}
-CLASS_NAMES = ["inform","persuade","entertain","deceive"]
-
-# Create prototype matrix
-proto_rows = []
-for name in CLASS_NAMES:
-    pv = intent_tfidf.transform(PROTOS[name])
-    pv_mean = np.asarray(pv.mean(axis=0))
-    pv_norm = normalize(pv_mean, norm="l2", axis=1)
-    proto_rows.append(pv_norm.ravel())
-PROTO_MAT = np.vstack(proto_rows)
-
-def predict_intent(title="", body=""):
-    """Predict intent using prototype matching"""
-    text = (" ".join([str(title or ""), str(body or "")])).strip()
-    z = intent_tfidf.transform([text])
-    zn = normalize(z, norm="l2", axis=1)
-    scores = (zn @ PROTO_MAT.T).ravel()
-    by_label = {CLASS_NAMES[i]: float(scores[i]) for i in range(4)}
-    top_label = max(by_label, key=by_label.get)
-    
-    return {
-        "primary_intent": top_label,
-        "confidence_scores": by_label
-    }
-
-print("Intent Classification Model loaded!")
-
-# %%
-# Model 3: Sensationalism Detection
-print("Loading Sensationalism Model...")
-
-TOKEN_RE = re.compile(r"[A-Za-z]+")
-
-EVIDENCE_PATTERNS = [
-    r"\b\d{1,3}(?:,\d{3})*(?:\.\d+)?\b",
-    r"\b(19|20)\d{2}\b",
-    r"%",
-    r"https?://",
-    r"\"[^\"]+\"",
-    r"\baccording to\b",
-    r"\breport(ed|s)? by\b|\bstudy\b|\bsurvey\b"
-]
-EVIDENCE_RE = [re.compile(pat, flags=re.I) for pat in EVIDENCE_PATTERNS]
-
-def evidence_anchors(text):
-    s = str(text)
-    hits = sum(len(r.findall(s)) for r in EVIDENCE_RE)
-    toks = max(1, len(TOKEN_RE.findall(s)))
-    dens = np.log1p(hits) / max(10, toks)
-    return float(np.clip(dens, 0.0, 0.2))
-
-tfidf = TfidfVectorizer(max_features=3000, stop_words='english', ngram_range=(1,2))
-train_text = df_tr['statement'].astype(str) + " " + df_tr['context'].astype(str)
-train_text = train_text.fillna("").astype(str)
-
-
-X_train_tfidf = tfidf.fit_transform(train_text)
-
-X_train_ev = df_tr['statement'].apply(evidence_anchors).values.reshape(-1, 1)
-
-X_train_final = hstack([X_train_tfidf, X_train_ev])
-
-SCORE_MAP = {
-    "pants-fire": 5, 
-    "false": 4, 
-    "barely-true": 3, 
-    "half-true": 2, 
-    "mostly-true": 1, 
-    "true": 0
-}
-
-# Map labels to scores
-train_scores = df_tr['label'].map(SCORE_MAP).fillna(0)
-
-# THRESHOLD = 2.5 means:
-# Scores 0, 1, 2 (True, Mostly-True, Half-True) -> 0 (Neutral)
-# Scores 3, 4, 5 (Barely-True, False, Pants-Fire) -> 1 (Sensational)
-THRESHOLD = 2.5 
-
-y_train_binary = train_scores.apply(lambda x: 1 if x >= THRESHOLD else 0)
-
-rf_model = SVC(kernel="linear", C=0.025, class_weight="balanced", probability=True)
-rf_model.fit(X_train_final, y_train_binary)
-
-def _features_for_inference(statement: str, context: str = "") -> np.ndarray:
-    # Combine Text (Statement + Context)
-    full_text = str(statement) + " " + str(context)
-    
-    # Vectorize
-    tfidf_vec = tfidf.transform([full_text])
-    
-    # Calculate Evidence Score
-    ev_score = evidence_anchors(statement)
-    ev_vec = np.array([[ev_score]]) # Reshape to (1, 1) to match sparse matrix format
-    
-    return hstack([tfidf_vec, ev_vec])
-
-def predict_sensationalism(statement: str, justification: str = ""):
-    """
-    Predicts if a statement is Sensational/False based on the trained model.
-    """
-    # Get features
-    f_vec = _features_for_inference(statement, justification)
-    
-    # Predict Probability
-    p_sensational = float(rf_model.predict_proba(f_vec)[0, 1])
-    
-    # Calculate Score (0 to 10)
-    # High probability of False = High Sensationalism Score
-    score_0_10 = float(np.clip(10.0 * p_sensational, 0.0, 10.0))
-    
-    # Determine Label
-    label = "sensational" if p_sensational >= 0.45 else "neutral"
-    
-    # Calculate Confidence
-    confidence = float(max(p_sensational, 1 - p_sensational))
-    
-    # Get Evidence Subscore
-    evidence_val = float(evidence_anchors(statement))
-
-    return {
-        "factor": "sensationalism",
-        "score": round(score_0_10, 3),
-        "confidence": round(confidence, 3),
-        "label": label,
-        "subscores": {
-            "evidence_density": round(evidence_val, 3),
-            "probability_fake": round(p_sensational, 3)
-        },
-    }
-
-print("Sensationalism Model loaded!")
-
-# %%
-# Model 6: Stance Classification
-print("Loading Stance Model...")
-
-# Ensure imports are available
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
-
-# Set device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
-
+# Ensure NLTK resources
 try:
-    stance_model_path = "../pred_models_training/stance_model"
-    stance_tokenizer = AutoTokenizer.from_pretrained(stance_model_path)
-    stance_model = AutoModelForSequenceClassification.from_pretrained(stance_model_path)
-    stance_model.to(device)
-    
-    # Stance mapping
-    id2stance = {0: "support", 1: "deny", 2: "neutral"}
-    
-    print(" Stance Model loaded successfully!")
-    
-except Exception as e:
-    print(f" Stance model not found: {e}")
-    print("Using fallback stance prediction...")
-    
-    # Fallback stance model
-    stance_model = None
-    stance_tokenizer = None
-    id2stance = None
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
-# %%
-def predict_article_stance(article_text=None, sentences=None):
-    """
-    Predicts stance for each sentence and aggregates results with majority vote.
-    Can accept either full article text or pre-split sentences.
-    """
-    # Check if model is loaded
-    if stance_model is None or stance_tokenizer is None:
-        return {"final_label": "neutral", "counts": {"neutral": 1}}
-    
-    if sentences is None:
-        if article_text is None:
-            return {"final_label": "neutral", "counts": {"neutral": 1}}
-        # Split article into sentences if not provided
-        sentences = nltk.sent_tokenize(article_text)
-        sentences = [s.strip() for s in sentences if s.strip()]
-    
-    if not sentences:
-        return {"final_label": "neutral", "counts": {"neutral": 1}}
+# -------------------------------------------------------------------------
+# Helper Functions
+# -------------------------------------------------------------------------
 
-    results = []
-    for sent in sentences:
-        # Tokenize each sentence separately
-        inputs = stance_tokenizer(
-            sent,
-            truncation=True,
-            padding=True,
-            max_length=512,
-            return_tensors="pt"
-        ).to(device)
-
-        # Forward pass
-        with torch.no_grad():
-            outputs = stance_model(**inputs)
-            probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-            pred_id = torch.argmax(probs, dim=-1).item()
-            label = stance_model.config.id2label[pred_id]
-            score = probs[0][pred_id].item()
-
-        results.append((sent, label, score))
-
-    # --- Majority vote across sentences ---
-    labels = [label for _, label, _ in results]
-    label_counts = Counter(labels)
-    majority_label = label_counts.most_common(1)[0][0]
-
-    return {
-        "final_label": majority_label,
-        "counts": dict(label_counts),
-    }
-
-# %%
-def get_sentences(text):
-    """Helper to ensure consistent sentence tokenization across all tools."""
+def get_sentences(text: str):
+    """Helper to split text into sentences for granular analysis."""
     try:
         sentences = nltk.sent_tokenize(text or "")
-        sentences = [s.strip() for s in sentences if len(s.strip()) > 5]
-        
+        # Filter out very short fragments
+        sentences = [s.strip() for s in sentences if len(s.strip()) > 10]
         if not sentences and text.strip():
             sentences = [text.strip()]
-            
         return sentences if sentences else []
     except Exception:
         return [text.strip()] if text else []
 
-# 1. News Coverage Tool
+# -------------------------------------------------------------------------
+# Tool Wrappers (Connecting ADK to Predictors.py)
+# -------------------------------------------------------------------------
+
 def tool_news_topic(article_text: str) -> dict:
-    """Classifies the primary news topic of the article."""
+    print("\n   [⚙️ MODEL EXECUTING] 🟢 'tool_news_topic' running...")
     sentences = get_sentences(article_text)
     votes = []
     for s in sentences:
         try:
-            votes.append(predict_news_coverage(s)["topic"])
-        except: continue
-    
+            res = predict_news_coverage(s)
+            # FIX: Ignore missing data labels ("None", "nan")
+            if res and res.get("label") and str(res["label"]) not in ["None", "nan", "unknown"]:
+                votes.append(res["label"])
+        except Exception as e:
+            print(f"      ❌ tool_news_topic error: {e}")
+            continue
+            
     topic = Counter(votes).most_common(1)[0][0] if votes else "unknown"
-    return {"news_coverage": topic}
+    
+    result = {"news_coverage": topic}
+    print(f"   [✅ MODEL OUTPUT] 🟢 'tool_news_topic' returned: {result}")
+    return result
 
-# 2. Intent Tool
 def tool_intent(article_text: str) -> dict:
-    """Identifies the primary communication intent (inform, persuade, etc)."""
+    print("\n   [⚙️ MODEL EXECUTING] 🟢 'tool_intent' running...")
     sentences = get_sentences(article_text)
     votes = []
     for s in sentences:
         try:
-            votes.append(predict_intent(title="", body=s)["primary_intent"])
-        except: continue
-    
+            res = predict_intent(title="", body=s)
+            if res and res.get("label"):
+                votes.append(res["label"])
+        except Exception as e:
+            # FIX: Stop failing silently! Print the actual error.
+            print(f"      ❌ tool_intent error: {e}")
+            continue
+            
     intent = Counter(votes).most_common(1)[0][0] if votes else "unknown"
-    return {"intent": intent}
+    
+    result = {"intent": intent}
+    print(f"   [✅ MODEL OUTPUT] 🟢 'tool_intent' returned: {result}")
+    return result
 
-# 3. Sensationalism Tool
 def tool_sensationalism(article_text: str) -> dict:
-    """Detects if the article uses sensationalist or neutral framing."""
+    print("\n   [⚙️ MODEL EXECUTING] 🟢 'tool_sensationalism' running...")
     sentences = get_sentences(article_text)
     votes = []
     for s in sentences:
         try:
-            votes.append(predict_sensationalism(s)["label"])
-        except: continue
+            res = predict_sensationalism(statement=s)
+            if res and res.get("label"):
+                votes.append(str(res["label"]))
+        except Exception as e:
+            print(f"      ❌ tool_sensationalism error: {e}")
+            continue
+            
+    final_label = Counter(votes).most_common(1)[0][0] if votes else "neutral"
     
-    label = Counter(votes).most_common(1)[0][0] if votes else "neutral"
-    return {"sensationalism": label}
+    result = {"sensationalism": final_label}
+    print(f"   [✅ MODEL OUTPUT] 🟢 'tool_sensationalism' returned: {result}")
+    return result
 
-
-# 6. Stance Tool
 def tool_stance(article_text: str) -> dict:
-    """Determines the political stance (support, deny, or neutral)."""
-    sentences = get_sentences(article_text)
+    print("\n   [⚙️ MODEL EXECUTING] 🟢 'tool_stance' running...")
     try:
-        result = predict_article_stance(sentences=sentences)
-        return {"stance": result["final_label"]}
-    except:
-        return {"stance": "neutral"}
-# %%
+        res = predict_article_stance(article_text=article_text)
+        label = res.get("label", "neutral")
+    except Exception as e:
+        print(f"      ❌ tool_stance error: {e}")
+        label = "neutral"
+        
+    result = {"stance": label}
+    print(f"   [✅ MODEL OUTPUT] 🟢 'tool_stance' returned: {result}")
+    return result
 
-os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "FALSE"
+# -------------------------------------------------------------------------
+# Agent Configurations
+# -------------------------------------------------------------------------
+
+# Load the .env file
+load_dotenv() 
+
+# Retrieve the key
+api_key = os.getenv("GOOGLE_API_KEY")
+
+# Check if it loaded correctly
+if not api_key:
+    raise ValueError("❌ GOOGLE_API_KEY not found! Make sure you created the .env file.")
 
 retry_config=types.HttpRetryOptions(
     attempts=5,  # Maximum retry attempts
@@ -439,11 +166,11 @@ retry_config=types.HttpRetryOptions(
     http_status_codes=[429, 500, 503, 504], # Retry on these HTTP errors
 )
 
-# %%
+# 1. Sensationalism Agent
 sensationalism_agent = Agent(
     name="Sensationalism_Analyst",
     model=Gemini(
-        model="gemini-2.5-flash-lite",
+        model="gemini-3-flash-preview",
         retry_options=retry_config
     ),
     instruction=(
@@ -456,11 +183,10 @@ sensationalism_agent = Agent(
         "PHASE 2: QUALITATIVE SYNTHESIS\n"
         "- Review the article's text independently for sensationalist phrasing and dramatic claims.\n"
         "- Compare the emotional tone of the headline vs. the content.\n"
-        "- Identify 'loaded' language, superlatives, and clickbait structures designed to provoke emotion.\n"
         "- Determine if the content prioritizes shock value and narrative over verifiable facts.\n"
         "- Based on your analysis, label the sensationalism for this article. If your independent analysis of "
         "linguistic patterns (e.g., use of exclamation, intense adjectives) contradicts the phase 1 model, "
-        "provide clear reasoning for the discrepancy in one sentence.\n\n"
+        "provide clear reasoning for the discrepancy in three sentences.\n\n"
         
         "**CONFIDENCE SCORE RUBRIC (0–100%):**\n"
         "90–100%: Definitive evidence. Multiple linguistic markers (hyperbole, clickbait, emotional appeals) align perfectly with tool results.\n"
@@ -473,16 +199,16 @@ sensationalism_agent = Agent(
         "**Sensationalism**\n"
         "* **Final Output:** [sensational or neutral] (Your final verdict)\n"
         "* **Confidence:** [0–100]%\n"
-        "* **Reasoning:** [Explain how you synthesized the model's prediction with your own analysis in 1 bullet point.]"
+        "* **Reasoning:** [Explain how you synthesized the model's prediction with your own analysis in 3 bullet points.]"
     ),
     tools=[tool_sensationalism],
     output_key="sensationalism_report"
 )
 
-# %%
+# 2. Stance Agent
 stance_agent = Agent(
     name="Stance_Analyst",
-    model=Gemini(model="gemini-2.5-flash-lite", retry_options=retry_config),
+    model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction=(
         "You are a senior linguistic editor. You follow a strict two-phase analysis protocol:\n\n"
         
@@ -515,7 +241,7 @@ stance_agent = Agent(
     tools=[tool_stance],
 )
 
-# %%
+# 3. Context Veracity Agent (Uses Google Search)
 instruction_text = """
 You are a senior investigative fact-checker specialized in analyzing **Context Veracity**.
 Your task is to evaluate the truthfulness and reliability of the article below based strictly on:
@@ -553,7 +279,7 @@ Use this rubric to determine your confidence score. Be strict.
 
 context_agent = Agent(
     name="Context_Veracity_Analyst",
-    model=Gemini(model="gemini-2.5-flash-lite"),
+    model=Gemini(model="gemini-3-flash-preview"),
     description="A specialized agent for verifying the contextual veracity of news articles.",
     instruction=instruction_text,
     tools=[google_search] 
@@ -561,7 +287,7 @@ context_agent = Agent(
 
 
 
-# %%
+# 4. News Coverage Agent
 instruction_text = """
 You are a senior editor specialized in categorizing news content.
 
@@ -596,19 +322,17 @@ OUTPUT FORMAT:
 
 news_coverage_agent = Agent(
     name="News_Coverage_Analyst",
-    model=Gemini(model="gemini-2.5-flash-lite", retry_options=retry_config),
+    model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction=instruction_text,
     tools=[tool_news_topic]
 )
 
-# %%
+# 5. Intent Agent
 instruction_text = """
 You are a media literacy expert specializing in identifying the intent behind news articles. 
-
 PHASE 1: PREDICTIVE DATA GATHERING
 - Call the 'tool_intent' tool immediately to get the initial model label.
 - - Do NOT provide a final answer until you have the results of this tool, and critically evaluate the model's label.
-
 PHASE 2: QUALITATIVE SYNTHESIS
 Analyze the text to determine the author's primary goal and what the author want you to do: 
   - **Inform** (Neutral facts, Likely to provide sources, data, and multiple perspectives)
@@ -617,7 +341,6 @@ Analyze the text to determine the author's primary goal and what the author want
   - **Deceive** (Fabrication/Misinformation, Likely to use strong emotional appeals, "us vs. them" language, and no verifiable sources)
 - Based on your own independent analysis, label the article with the intent, and compare with the model's label from Phase 1.
 - If the model label contradicts your analysis, provide reasoning in one bullet point.
-
 
 **CONFIDENCE SCORE RUBRIC (0–100%):**
 90-100%: Intent is obvious and consistent.
@@ -634,12 +357,12 @@ OUTPUT FORMAT:
 
 intent_agent = Agent(
     name="Intent_Analyst",
-    model=Gemini(model="gemini-2.5-flash-lite", retry_options=retry_config),
+    model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction=instruction_text,
     tools=[tool_intent]
 )
 
-# %%
+# 6. Title vs Body Agent (Uses Google Search)
 instruction_text = """
 You are a strict editor analyzing the consistency between an article's **Headline** and its **Body**.
 
@@ -670,15 +393,18 @@ OUTPUT FORMAT:
 
 title_body_agent = Agent(
     name="Title_Body_Analyst",
-    model=Gemini(model="gemini-2.5-flash-lite", retry_options=retry_config),
+    model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction=instruction_text,
     tools=[google_search]
 )
 
-# %%
+# -------------------------------------------------------------------------
+# Root Coordinator
+# -------------------------------------------------------------------------
+
 root_agent = Agent(
     name="ParallelCoordinator",
-    model=Gemini(model="gemini-2.5-flash-lite", retry_options=retry_config),
+    model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction="""
 You are a parallel coordinator.
 
@@ -744,8 +470,10 @@ Return ONLY this Markdown template.
 
 - **Final Labels for Sensationalism:** <label>
 - **Final Confidence:** <0-100>%
-- **Why (1 bullet):**
+- **Why (3 bullet):**
   - <bullet 1>
+  - <bullet 2>
+  - <bullet 3>
 
 - **Final Labels for Stance:** <label>
 - **Final Confidence:** <0-100>%
@@ -777,15 +505,75 @@ RULES:
     ],
 )
 
-from google.adk.a2a.utils.agent_to_a2a import to_a2a
-import uvicorn
+# -------------------------------------------------------------------------
+# Server Execution
+# -------------------------------------------------------------------------
 
-# port=8000 is default, but the guide suggests using 8001 if 
-# you plan to run a local 'Consuming' agent on 8000.
+'''
 a2a_app = to_a2a(root_agent, port=8000)
 
 if __name__ == "__main__":
     print("🚀 Root Agent Server starting...")
     # Using 'a2a_app' here instead of 'app' to match the doc's naming
     uvicorn.run(a2a_app, host="0.0.0.0", port=8000)
+'''
 
+# %%
+article_body = "HONG KONG, Dec 2 (Reuters) - Hong Kong's leader said on Tuesday a judge-led committee will investigate the cause of the city's deadliest fire in decades and review government oversight of renovation practices linked to the blaze that killed at least 151 people.\nPolice have arrested 13 people for suspected manslaughter, and 12 others in a related corruption probe. Officials said substandard plastic mesh and insulation foam used during renovation works fueled the rapid spread of the fire across seven high-rise towers.\nAuthorities said they aim to avoid similar tragedies by examining how the fire spread so quickly and the oversight failures around building renovations.\n\nSEARCH AND INVESTIGATION\nInvestigators have combed most of the damaged towers, finding victims in stairwells and rooftops as they attempted to escape. Around 30 people remain missing.\nSome civic groups have demanded transparency and accountability, while police have warned against \"politicising\" the tragedy. A student was detained and later released, and media reports indicate others are under investigation for possible sedition.\nInternational rights groups argue the government's response reflects broader suppression of criticism.\n\nRESIDENTS WARNED PRIOR\nResidents of Wang Fuk Court had previously raised concerns about fire hazards and flammable materials used on scaffolding. Tests showed mesh samples did not meet fire-retardant standards.\nOfficials also reported foam insulation accelerated the fire and that alarms were malfunctioning.\nOver 1,500 residents have been displaced into temporary housing. Authorities are offering emergency funds and fast-tracked document replacement.\n\nVIGILS AND RECOVERY\nThousands across Hong Kong and cities like Tokyo, Taipei, and London have held vigils. Several victims were migrant domestic workers.\nThe search of the most heavily damaged towers may take weeks, as responders work through collapsed interiors."
+article_title = "Hong Kong orders judge-led probe into fire that killed 151"
+prompt = f"Title: {article_title}\nBody: {article_body}"
+
+# %%
+import asyncio
+from google.adk.runners import InMemoryRunner
+
+async def main():
+    runner = InMemoryRunner(agent=root_agent)
+    prompt = f"Title: {article_title}\nBody: {article_body}"
+    response = await runner.run_debug(prompt)
+    # Allow aiohttp to gracefully close its network sessions to prevent teardown warnings
+    await asyncio.sleep(1.0)
+    return response
+
+if __name__ == "__main__":
+    response = asyncio.run(main())
+    
+    print("\n" + "="*50)
+    print(" 🛠️ BEHIND THE SCENES: FULL AGENT TRACE")
+    print("="*50)
+    
+    for event in response:
+        # Get the name of the agent that is currently acting
+        author = getattr(event, 'author', 'System')
+        
+        if hasattr(event, 'content') and event.content:
+            for part in event.content.parts:
+                
+                # 1. Did the agent call a tool/function?
+                if hasattr(part, 'function_call') and part.function_call:
+                    tool_name = part.function_call.name
+                    print(f"\n▶️ [{author}] triggered tool -> {tool_name}")
+                    
+                    # Print the arguments passed to the tool
+                    for key, value in part.function_call.args.items():
+                        short_val = repr(value)[:100] + " ... [TRUNCATED]" if len(str(value)) > 100 else value
+                        print(f"    📥 Input ({key}): {short_val}")
+
+                # 2. Did the tool send data back to the agent?
+                elif hasattr(part, 'function_response') and part.function_response:
+                    tool_name = part.function_response.name
+                    print(f"\n◀️ [{author}] received data from <- {tool_name}")
+                    
+                    # Print the tool's output
+                    for key, value in part.function_response.response.items():
+                        short_val = repr(value)[:100] + " ... [TRUNCATED]" if len(str(value)) > 100 else value
+                        print(f"    📤 Output ({key}): {short_val}")
+
+                # 3. Did the agent generate final text?
+                elif hasattr(part, 'text') and part.text:
+                    # We only want to print the giant Markdown report if it's from the top boss
+                    if author == "ParallelCoordinator":
+                        print("\n" + "="*50)
+                        print(" 📝 FINAL SYNTHESIS REPORT")
+                        print("="*50 + "\n")
+                        print(part.text)
