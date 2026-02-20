@@ -6,5 +6,4 @@ from .predictors import (
     predict_article_reputation,
     predict_article_stance,
     analyze_complete_article,
-    analyze_whole_article,
 )

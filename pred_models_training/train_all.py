@@ -34,6 +34,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.ensemble import RandomForestClassifier
 from nrclex import NRCLex
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from sklearn.utils.class_weight import compute_class_weight
 
 
 
@@ -44,13 +45,14 @@ from .predictors import (
     read_tsv,
     text_of,
     extract_sentiment_features_from_statement,
-    create_sentiment_feature_dataframe,
     evidence_anchors,
     ARTIFACT_DIR,
     TOPIC_ARTIFACT,
     INTENT_ARTIFACT,
     SENS_ARTIFACT,
     SENTIMENT_ARTIFACT,
+    text_of,
+    first_subject
 )
 
 warnings.filterwarnings("ignore")
@@ -58,25 +60,51 @@ warnings.filterwarnings("ignore")
 def _ensure_dir():
     os.makedirs(ARTIFACT_DIR, exist_ok=True)
 
-def _pick_col(df: pd.DataFrame, candidates: List[str]) -> str:
-    for c in candidates:
-        if c in df.columns:
-            return c
-    raise KeyError(f"None of {candidates} found in columns: {list(df.columns)}")
+def train_topic(
+    train_tsv ="./pred_data/train2.tsv",
+    artifact_path: str = os.path.join(ARTIFACT_DIR, "topic_pipeline.joblib"),
+    random_state: int = 42,
+) -> dict:
+    """
+    Trains the News Coverage / Topic classifier and saves it to artifact_path.
+    Returns a small dict with model + basic info.
+    """
+    df_tr = read_tsv(train_tsv)
+    X_tr = df_tr.apply(text_of, axis=1)
+    y_tr = df_tr["topic"].apply(first_subject)  # <-- topic label
 
-def train_topic(train_path="./pred_data/train2.tsv", val_path="./pred_data/val2.tsv"):
-    df_tr = read_tsv(train_path)
-    ycol = _pick_col(df_tr, ["topic", "News Coverage", "news_coverage", "label_topic"])
-    x = df_tr.apply(text_of, axis=1).tolist()
-    y = df_tr[ycol].astype(str).tolist()
+    # drop unknowns
+    keep = y_tr.ne("unknown")
+    X_tr, y_tr = X_tr[keep], y_tr[keep]
+
+    classes = np.unique(y_tr)
+    weights = compute_class_weight(class_weight="balanced", classes=classes, y=y_tr)
+    wmap = {c: w for c, w in zip(classes, weights)}
 
     pipe = Pipeline([
-        ("tfidf", TfidfVectorizer(lowercase=True, strip_accents="unicode", ngram_range=(1,2), max_features=50000)),
-        ("clf", LinearSVC(random_state=42)),
+        ("tfidf", TfidfVectorizer(
+            lowercase=True,
+            strip_accents="unicode",
+            analyzer="word",
+            ngram_range=(1, 2),
+            min_df=2,
+            max_df=0.9,
+            sublinear_tf=True,
+        )),
+        ("clf", LinearSVC(class_weight=wmap, random_state=random_state)),
     ])
-    pipe.fit(x, y)
-    joblib.dump(pipe, TOPIC_ARTIFACT)
-    return pipe
+
+    pipe.fit(X_tr, y_tr)
+
+    os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
+    joblib.dump(pipe, artifact_path)
+
+    out = {
+        "artifact_path": artifact_path,
+        "n_train": int(len(X_tr)),
+        "n_classes": int(len(classes)),
+        "classes": list(map(str, classes)),
+    }
 
 INTENT_ARTIFACT = os.path.join(ARTIFACT_DIR, "intent_proto.joblib")
 
