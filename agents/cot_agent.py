@@ -296,11 +296,11 @@ PHASE 1: PREDICTIVE DATA GATHERING
 - Do NOT provide a final answer until you have the results of this tool, and critically evaluate the model's label.
 
 PHASE 2: QUALITATIVE SYNTHESIS
-- Review the article's text independently to identify the primary topic。
+- Review the article's text independently to identify the primary topic
 - What kind of news is covered in this article? Determine the type of news: local, global, opinion, etc. 
 - Check if similar events receive similar coverage. 
 - Compare coverage angle with other reputable sources.
-- Label the article with a new topic. 
+- Label the article with a news topic. 
 
 * **Output:** [Label]
 * **Confidence:** [0–100]%
