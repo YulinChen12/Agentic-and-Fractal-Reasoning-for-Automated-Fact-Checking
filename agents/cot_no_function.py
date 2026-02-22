@@ -1,34 +1,68 @@
-import os
-import sys
-import warnings
-from collections import Counter
-import nltk
+# %%
+# ADK Imports
+from google.adk.agents import Agent, SequentialAgent, ParallelAgent, LoopAgent
+from google.adk.tools import AgentTool, google_search
+from google.adk.models.google_llm import Gemini
+from google.adk.runners import InMemoryRunner
+from google.adk.a2a.utils.agent_to_a2a import to_a2a
+from google.genai import types
 from dotenv import load_dotenv
+import os
+from pathlib import Path
 
+
+# %%
 # -------------------------------------------------------------------------
 # PATH CONFIGURATION
 # -------------------------------------------------------------------------
-# Get the absolute path of the current file (agents/cot_agent.py)
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# Get the parent directory (project_root)
-parent_dir = os.path.dirname(current_dir)
-# Construct path to sibling directory (pred_models_training)
-predictors_dir = os.path.join(parent_dir, 'pred_models_training')
+try:
+    current_dir = Path(__file__).resolve().parent         
+except NameError:
+    current_dir = Path.cwd()                               
 
-# Add to sys.path so Python can find predictors.py
-if predictors_dir not in sys.path:
-    sys.path.append(predictors_dir)
+parent_dir = current_dir.parent                            # project_root
 
+# %%
+from pydantic import BaseModel, Field, ConfigDict
+from typing import List
+
+# Ensure agents use the same langauge
+
+class FactorAnalysis(BaseModel):
+    
+    verdict: str = Field(description="The final label (e.g., 'sensational', 'support')")
+    confidence: int = Field(description="Confidence score 0-100")
+    fcot_reasoning: str = Field(description="2-3 sentence FCoT reasoning.")
+
+class FactCheckFinalReport(BaseModel):
+    # 1. High-Level Summary
+    final_verdict: str = Field(..., description="The definitive verdict (e.g., Verified Accurate, Misleading, Misinformation, Disinformation, etc.).")
+    overall_confidence: int = Field(..., ge=0, le=100, description="Confidence score from 0-100.")
+    
+    # 2. Human-Centric Explanation (The 'Why')
+    verdict_justification: str = Field(
+        ..., 
+        description="A 1-3 sentence explanation synthesizing why this verdict was reached based on the factor analysis."
+    )
+
+    # 3. Agent Metadata
+    agents_involved: List[str] = Field(
+        default=["Sensationalism_Analyst", "Stance_Analyst", "Context_Veracity_Analyst", 
+                 "News_Coverage_Analyst", "Intent_Analyst", "Title_Body_Analyst"],
+        description="List of specialized agents that contributed factor data."
+    )
+
+    # 4. Detailed Factor Signals
+    # These contain the individual verdicts and FCoT reasoning for the audit trail
+    sensationalism_signal: FactorAnalysis
+    stance_signal: FactorAnalysis
+    context_veracity_signal: FactorAnalysis
+    news_coverage_signal: FactorAnalysis
+    intent_signal: FactorAnalysis
+    title_body_signal: FactorAnalysis
 # -------------------------------------------------------------------------
-# IMPORTS
+# Agent Configurations
 # -------------------------------------------------------------------------
-# ADK Imports
-from google.adk.agents import Agent
-from google.adk.tools import AgentTool, google_search
-from google.adk.models.google_llm import Gemini
-from google.adk.a2a.utils.agent_to_a2a import to_a2a
-from google.genai import types
-import uvicorn
 
 # Load the .env file
 load_dotenv() 
@@ -38,7 +72,7 @@ api_key = os.getenv("GOOGLE_API_KEY")
 
 # Check if it loaded correctly
 if not api_key:
-    raise ValueError("❌ GOOGLE_API_KEY not found! Make sure you created the .env file.")
+    raise ValueError("GOOGLE_API_KEY not found! Make sure you created the .env file.")
 
 retry_config=types.HttpRetryOptions(
     attempts=5,  # Maximum retry attempts
@@ -47,8 +81,10 @@ retry_config=types.HttpRetryOptions(
     http_status_codes=[429, 500, 503, 504], # Retry on these HTTP errors
 )
 
+# %% [markdown]
 # --- Agent Definitions ---
 
+# %%
 sensationalism_agent = Agent(
     name="Sensationalism_Analyst",
     model=Gemini(
@@ -56,16 +92,14 @@ sensationalism_agent = Agent(
         retry_options=retry_config
     ),
     instruction=(
-        "You are a senior linguistic editor specializing in media bias. You follow a strict two-phase analysis protocol:\n\n"
+        "You are a senior linguistic editor specializing in media bias.\n\n"
         
         "ANALYSIS PROTOCOL\n"
         "- Review the article's text independently for sensationalist phrasing and dramatic claims.\n"
         "- Compare the emotional tone of the headline vs. the content.\n"
         "- Identify 'loaded' language, superlatives, and clickbait structures designed to provoke emotion.\n"
         "- Determine if the content prioritizes shock value and narrative over verifiable facts.\n"
-        "- Based on your analysis, label the sensationalism for this article. If your independent analysis of "
-        "linguistic patterns (e.g., use of exclamation, intense adjectives) is contradictory, "
-        "provide clear reasoning for the discrepancy in one sentence.\n\n"
+        "- Based on your analysis, label the sensationalism for this article."
         
         "**CONFIDENCE SCORE RUBRIC (0–100%):**\n"
         "90–100%: Definitive evidence. Multiple linguistic markers (hyperbole, clickbait, emotional appeals) are strongly supported by the text.\n"
@@ -83,20 +117,20 @@ sensationalism_agent = Agent(
     output_key="sensationalism_report"
 )
 
+# %%
 stance_agent = Agent(
     name="Stance_Analyst",
     model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction=(
-        "You are a senior linguistic editor. You follow a strict two-phase analysis protocol:\n\n"
+        "You are a senior linguistic editor.\n\n"
         
         "ANALYSIS PROTOCOL\n"
         "- Review the article's text independently to understand the author's opinion about the news.\n"
         "- Analyze if content supports, denies, or is neutral towards claims.\n"
         "- Evaluate consistency in stance throughout the content.\n"
         "- Determine if shifts in stance are supported by factual developments.\n"
-        "- Label the article with your analysis result and  "
-        "If your independent analysis of the arguments in the article "
-        "is contradictory, provide your reasoning for the discrepancy.\n\n"
+        "- Based on your own independent analysis using linguistics patterns, label the article with the stance."
+
         
         "**CONFIDENCE SCORE RUBRIC (0–100%):**\n"
         "90–100%: High Alignment. Qualitative analysis strongly is supported by the text with explicit, unambiguous evidence.\n"
@@ -113,17 +147,17 @@ stance_agent = Agent(
     ),
 )
 
+# %%
 instruction_text_context = """
 You are a senior investigative fact-checker specialized in analyzing **Context Veracity**.
 Your task is to evaluate the truthfulness and reliability of the article below based strictly on:
 1. **Contextual Coherence**: Does the article stay on the same topic throughout? Are the headline and body consistent?
 2. **Factual Plausibility**: Does the article use generally accepted facts (based on your internal knowledge)? Does it contain obvious hallucinations or contradictions?
 
-**PHASE 1: INTERNAL ANALYSIS**
 - Review the article's text independently for logical inconsistencies, contradictions, or missing key context.
 - Evaluate if the content stays on topic (coherence).
-- Check if the article uses **true facts** (based on your internal knowledge base) o
-r if it invents events/figures.
+- Check if the article uses **true facts** (based on your internal knowledge base) or if it invents events/figures.
+- If the event takes place in 2025 or 2026, then use your knowledge to determine if it is plausible to happen instead of relying on the internal training date you had.
 - Determine if the context is **Accurate**, or **Inaccurate**
 
 **ANALYSIS PROTOCOL**
@@ -147,6 +181,7 @@ Use this rubric to determine your confidence score. Be strict.
 * **Reasoning:** [Explain your judgment. Point out specific internal cues (consistency, detail, logic) that led to your decision and confidence score in 2 sentences.]
 """
 
+# %%
 context_agent = Agent(
     name="Context_Veracity_Analyst",
     model=Gemini(model="gemini-3-flash-preview"),
@@ -154,6 +189,7 @@ context_agent = Agent(
     instruction=instruction_text_context 
 )
 
+# %%
 instruction_text_coverage = """
 You are a senior editor specialized in categorizing news content.
 
@@ -161,8 +197,9 @@ ANALYSIS PROTOCOL
 - Review the article's text independently to identify the primary topic
 - What kind of news is covered in this article? Determine the type of news: local, global, opinion, etc. 
 - A news topic is based on the topics that the article talked about. For example, if the article talked about movie reviews, then the topic would be entertainment.
-- Compare coverage angle with other reputable sources.
-- Label the article with a news topic. 
+- Compare coverage angle with other reputable sources in your internal training datas.
+- Based on your own independent analysis using linguistics patterns, label the article with the news topic.
+
 
 **CONFIDENCE SCORE RUBRIC (0–100%):**
 90-100%: Topic is explicitly the main focus.
@@ -177,12 +214,14 @@ OUTPUT FORMAT:
 * **Reasoning:** [Brief explanation for your decision in one sentence.]
 """
 
+# %%
 news_coverage_agent = Agent(
     name="News_Coverage_Analyst",
     model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction=instruction_text_coverage
 )
 
+# %%
 instruction_text_intent = """
 You are a media literacy expert specializing in identifying the intent behind news articles. 
 
@@ -192,8 +231,8 @@ Analyze the text to determine the author's primary goal and what the author want
   - **Persuade** (Opinion/Argument, May use emotional appeals but still be based on a clear argument)
   - **Entertain** (Humor/Satire/Light)
   - **Deceive** (Fabrication/Misinformation, Likely to use strong emotional appeals, "us vs. them" language, and no verifiable sources)
-- Based on your own independent analysis, label the article with the intent, and compare with the model's label from Phase 1.
-- If the model label contradicts your analysis, provide reasoning in one bullet point.
+- Based on your own independent analysis using linguistics patterns, label the article with the intent.
+
 
 **CONFIDENCE SCORE RUBRIC (0–100%):**
 90-100%: Intent is obvious and consistent.
@@ -208,12 +247,14 @@ OUTPUT FORMAT:
 * **Reasoning:** [Brief explanation for your decision in one bullet point.]
 """
 
+# %%
 intent_agent = Agent(
     name="Intent_Analyst",
     model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction=instruction_text_intent
 )
 
+# %%
 instruction_text_title = """
 You are a strict editor analyzing the consistency between an article's **Headline** and its **Body**.
 
@@ -241,167 +282,124 @@ OUTPUT FORMAT:
 * **Reasoning:** [Explain the relationship between the title and the evidence in the body in one bullet point.]
 """
 
+# %%
 title_body_agent = Agent(
     name="Title_Body_Analyst",
     model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction=instruction_text_title
 )
 
-root_agent = Agent(
-    name="ParallelCoordinator",
-    model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
-    instruction="""
-You are a parallel coordinator.
-
-TOOL CALL RULES (CRITICAL):
-- You MUST call ALL tools in the same step (parallel):
-  - News_Coverage_Analyst
-  - Intent_Analyst
-  - Sensationalism_Analyst
-  - Stance_Analyst
-  - Title_Body_Analyst
-  - Context_Veracity_Analyst
-
-AFTER TOOL OUTPUTS:
-- Extract ALL labels + confidences (always show all 6).
-- Then perform a quick double-check yourself:
-- Ensure Intent aligns with Sensationalism (e.g., "Deceive" should match "High Sensationalism").
-- Verify the Title vs Body label (Agree/Discuss/Negate/Unrelated) is accurately supported by the evidence found in the Body analysis.
-- Cross-reference Context Veracity—if sources are missing, adjust confidence scores for Intent and News Coverage downward.
-
-FINAL JUDGMENT GUIDANCE:
-- Based on your research and results from the agents, output the final results along with confidence score.
-
-FINAL OUTPUT FORMAT (STRICT):
-Return ONLY this Markdown template.
-
-## 🧠 Agent Analysis Summary
-
-### 🔍 Labels
-| Signal | Label | Confidence |
-|---|---|---|
-| News Coverage | <label> | <0-100>% |
-| Intent | <label> | <0-100>% |
-| Sensationalism | <label> | <0-100>% |
-| Stance | <label> | <0-100>% |
-| Title vs Body | <label> | <0-100>% |
-| Context Veracity | <label> | <0-100>% |
-
-### ✅ Double-check
-- <check 1 with one sentence summary of results>
-
-### 🧾 Short Summary
-<2-3 sentences summarizing the body text.>
-
-### 🎯 Final Judgment
-
-**CONFIDENCE SCORE RUBRIC (0–100%):**
-* **90–100%:** Explicit, unambiguous language supports your label.
-* **75–89%:** Trend is clear and consistent.
-* **50–74%:** Text is mixed, ambiguous, or open to interpretation.
-* **25–49%:** Text is too short or vague.
-* **0–24%:** Cannot meaningfully determine.
-
-- **Final Labels for News Coverage:** <label>
-- **Final Confidence:** <0-100>%
-- **Why (1 bullet):**
-  - <bullet 1>
- 
-- **Final Labels for Intent:** <label>
-- **Final Confidence:** <0-100>%
-- **Why (1 bullet):**
-  - <bullet 1>
-
-- **Final Labels for Sensationalism:** <label>
-- **Final Confidence:** <0-100>%
-- **Why (1 bullet):**
-  - <bullet 1>
-
-- **Final Labels for Stance:** <label>
-- **Final Confidence:** <0-100>%
-- **Why (1 bullet):**
-  - <bullet 1>
-
-- **Final Labels for Title vs Body:** <label>
-- **Final Confidence:** <0-100>%
-- **Why (1 bullet):**
-  - <bullet 1>
-
-- **Final Labels for Context Veracity:** <label>
-- **Final Confidence:** <0-100>%
-- **Why (1 bullet):**
-  - <bullet 1>
-
-RULES:
-- Do not include raw tool outputs.
-- Do not mention tool traces or internal IDs.
-""",
+# %%
+factor_squad = ParallelAgent(
+    name="Factor_Squad",
+    sub_agents=[
+        sensationalism_agent, 
+        stance_agent, 
+        context_agent,
+        news_coverage_agent, 
+        intent_agent, 
+        title_body_agent
+    ]
 )
 
-# --- Execution Logic ---
-
-def load_test_articles(path="gen_data/test_article_no_label.json"):
-    if not os.path.exists(path):
-        print(f"Error: File not found at {path}")
-        return []
+# %%
+synthesizer_agent = Agent(
+    name="Final_Synthesizer",
+    model=Gemini(model="gemini-3-flash-preview"),
+    instruction="""
+    You are the Final Judgment Lead. You will receive tool outputs from 6 different analysts.
     
-    with open(path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-        
-    return data.get("articles", [])
-
-async def process_batch(articles_batch, batch_name="Batch"):
-    runner = InMemoryRunner(agent=root_agent)
-    print(f"=== Processing {batch_name} ({len(articles_batch)} articles) ===")
+    YOUR TASKS:
+    1. Extract ALL labels and confidence scores (0-100%).
+    2. Perform a Double-Check: 
+       - Does Intent ("Deceive") align with Sensationalism ("High")?
+       - Does Title vs Body (Agree/Negate) match the body evidence?
+       - Adjust confidence downward if Context Veracity reports missing sources.
     
-    for i, art in enumerate(articles_batch):
-        headline = art.get('headline', 'No Title')
-        print(f"\n[{batch_name}] Article {i+1}: {headline}")
-        
-        # Prepare Prompt
-        prompt = (
-            f"Headline: {headline}\n"
-            f"Source: {art.get('news_source', 'Unknown')}\n"
-            f"Author: {art.get('author', 'Unknown')}\n"
-            f"Date: {art.get('date', 'Unknown')}\n\n"
-            f"Body:\n{art.get('text', '')}"
-        )
-        
-        # Run Agent using run_debug
-        try:
-            response = await runner.run_debug(prompt)
-            
-            # Access output based on ADK response structure
-            if hasattr(response, 'output'):
-                print(response.output)
-            else:
-                print(response)
-                
-        except Exception as e:
-            print(f"Error running agent: {e}")
+    3. OUTPUT FORMAT (STRICT):
+    Return ONLY the Markdown template provided below. 
+    ## Agent Analysis Summary
 
-        print("-" * 50)
-        
-        # Sleep slightly to help with rate limits even within batch
-        await asyncio.sleep(2)
+    ### Labels
+    | Signal | Label | Confidence |
+    |---|---|---|
+    | News Coverage | <label> | <0-100>% |
+    | Intent | <label> | <0-100>% |
+    | Sensationalism | <label> | <0-100>% |
+    | Stance | <label> | <0-100>% |
+    | Title vs Body | <label> | <0-100>% |
+    | Context Veracity | <label> | <0-100>% |
+
+    ### Double-check
+    - <check 1 with one sentence summary of results>
+
+    ### Short Summary
+    <2-3 sentences summarizing the body text.>
+
+
+    ### Final Judgment
+
+    **CONFIDENCE SCORE RUBRIC (0–100%):**
+    * **90–100%:** Explicit, unambiguous language supports your label.
+    * **75–89%:** Trend is clear and consistent.
+    * **50–74%:** Text is mixed, ambiguous, or open to interpretation.
+    * **25–49%:** Text is too short or vague.
+    * **0–24%:** Cannot meaningfully determine.
+
+    - **Final Labels for News Coverage:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+    - <bullet 1>
+    
+    - **Final Labels for Intent:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+    - <bullet 1>
+
+    - **Final Labels for Sensationalism:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (3 bullet):**
+    - <bullet 1>
+    - <bullet 2>
+    - <bullet 3>
+
+    - **Final Labels for Stance:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+    - <bullet 1>
+
+    - **Final Labels for Title vs Body:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+    - <bullet 1>
+
+    - **Final Labels for Context Veracity:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+    - <bullet 1>
+
+    RULES:
+    - Do not include raw tool outputs.
+    - Do not mention tool traces or internal IDs.
+    """
+)
+
+
+# %%
+root_agent = SequentialAgent(
+    name="COT__No_Tool_Framework",
+    sub_agents=[factor_squad, synthesizer_agent]
+)
+
+# %%
+import asyncio
 
 async def main():
-    # Load all data
-    all_articles = load_test_articles()
-    print(f"Total articles loaded: {len(all_articles)}")
+    runner = InMemoryRunner(agent=root_agent)
+    prompt = "Hello, how does this work?"
+    response = await runner.run_debug(prompt)
     
-    # Process batches as requested in the notebook
-    if len(all_articles) > 0:
-        await process_batch(all_articles[0:5], "Batch 1")
-    if len(all_articles) > 5:
-        await process_batch(all_articles[5:10], "Batch 2")
-    # Batch 3 overlap in notebook: 8:9 then 10:15
-    if len(all_articles) > 8:
-        await process_batch(all_articles[8:9], "Batch 3 (Single)")
-    if len(all_articles) > 10:
-        await process_batch(all_articles[10:15], "Batch 3")
-    if len(all_articles) > 15:
-        await process_batch(all_articles[15:], "Batch 4")
+    print(response)
 
 if __name__ == "__main__":
     asyncio.run(main())
