@@ -33,7 +33,7 @@
       "reputation": "Low",
       "stance": "Critical",
       "title_vs_body": "Agree",
-      "context_veracity": "Unverified",
+      "context_veracity": "Inaccurate",
       "location": "Global"
     },
 
@@ -89,7 +89,7 @@
       "sentiment": "Neutral",
       "reputation": "Low",
       "stance": "Neutral",
-      "title_vs_body": "Agree",
+      "   ": "Agree",
       "context_veracity": "Reasonably accurate",
       "location": "United States"
     },
@@ -127,7 +127,7 @@
       "reputation": "Low",
       "stance": "Neutral",
       "title_vs_body": "Unrelated",
-      "context_veracity": "Misleading",
+      "context_veracity": "Inaccurate",
       "location": "United Kingdom"
     }
 

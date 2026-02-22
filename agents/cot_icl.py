@@ -152,6 +152,23 @@ def tool_stance(article_text: str) -> dict:
     return result
 
 # %%
+import json
+import asyncio
+
+def load_train_articles(path = os.path.join(parent_dir, 'gen_data/train_article.json')):
+    if not os.path.exists(path):
+        print(f"Error: File not found at {path}")
+        return []
+    
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+        
+    return data.get("articles", [])
+
+# %%
+training_data = load_train_articles()
+
+# %%
 execute_web_search = Agent(
     name="Web_Search_Provider",
     model="gemini-3-flash-preview",
@@ -191,6 +208,10 @@ sensationalism_agent = Agent(
     ),
     instruction=(
         "You are a senior linguistic editor specializing in media bias. You follow a strict two-phase analysis protocol:\n\n"
+
+        "### REFERENCE LIBRARY (Human-Labeled Examples)\n"
+        "Use these 7 examples to calibrate your judgment, focus on the sensationalism label to learn patterns to help you analyze.\n" f"{training_data}\n\n" 
+        "CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label"
         
         "PHASE 1: PREDICTIVE DATA GATHERING\n"
         "- Call the 'tool_sensationalism' tool immediately to get the initial model label.\n"
@@ -227,6 +248,12 @@ stance_agent = Agent(
     model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     instruction=(
         "You are a senior linguistic editor. You follow a strict two-phase analysis protocol:\n\n"
+
+        "### REFERENCE LIBRARY (Human-Labeled Examples)\n"
+        "Use these 7 examples to calibrate your judgment. Pay close attention to how "
+        "sensationalism or tone influences the final 'Stance' label:\n"
+        f"{training_data}\n\n" 
+        "CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label"
         
         "PHASE 1: PREDICTIVE DATA GATHERING\n"
         "- Call the 'tool_stance' tool immediately to get the initial model label.\n"
@@ -270,6 +297,11 @@ Your task is to evaluate the truthfulness and reliability of the article below b
 1. **Contextual Coherence**: Does the article stay on the same topic throughout? Are the headline and body consistent?
 2. **Factual Plausibility**: Does the article use generally accepted facts (based on your internal knowledge)? Does it contain obvious hallucinations or contradictions?
 
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the context_veracity label to learn patterns to help you analyze. {training_data}
+CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label.
+        
+
 **PHASE 1: INTERNAL ANALYSIS**
 - Review the article's text independently for logical inconsistencies, contradictions, or missing key context.
 - Evaluate if the content stays on topic (coherence).
@@ -310,8 +342,11 @@ context_agent = Agent(
 
 
 # 4. News Coverage Agent
-instruction_text = """
+instruction_text = f"""
 You are a senior editor specialized in categorizing news content.
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the coverage label to learn patterns to help you analyze. {training_data}
+CRTICITAL:  Share one sentence with a pattern you learned from reading the training articles and label
 
 PHASE 1: PREDICTIVE DATA GATHERING
 - Call the 'tool_news_topic' tool immediately to get the initial model label.
@@ -350,8 +385,12 @@ news_coverage_agent = Agent(
 )
 
 # 5. Intent Agent
-instruction_text = """
+instruction_text = f"""
 You are a media literacy expert specializing in identifying the intent behind news articles. 
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the intent label to learn patterns to help you analyze. {training_data}
+CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label
+
 PHASE 1: PREDICTIVE DATA GATHERING
 - Call the 'tool_intent' tool immediately to get the initial model label.
 - - Do NOT provide a final answer until you have the results of this tool, and critically evaluate the model's label.
@@ -385,9 +424,12 @@ intent_agent = Agent(
 )
 
 # 6. Title vs Body Agent (Uses Google Search)
-instruction_text = """
+instruction_text = f"""
 You are a strict editor analyzing the consistency between an article's **Headline** and its **Body**.
-
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the title_vs_body label to learn patterns to help you analyze. {training_data}
+Share one sentence with a pattern you learned from reading the training articles and label
+  
 **OBJECTIVE:** Determine if the title, agree, discuss, is unrelated to, or negate the body of the text.
 
 **ANALYSIS STEPS:**
@@ -523,8 +565,6 @@ root_agent = SequentialAgent(
     sub_agents=[factor_squad, synthesizer_agent]
 )
 
-import asyncio
-
 async def main():
     runner = InMemoryRunner(agent=root_agent)
     prompt = "Hello, how does this work?"
@@ -534,6 +574,8 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
 
 # %%
 # -------------------------------------------------------------------------

@@ -150,6 +150,23 @@ def tool_stance(article_text: str) -> dict:
     print(f"'tool_stance' returned: {result}")
     return result
 
+# %%
+import json
+import asyncio
+
+def load_train_articles(path = os.path.join(parent_dir, 'gen_data/train_article.json')):
+    if not os.path.exists(path):
+        print(f"Error: File not found at {path}")
+        return []
+    
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+        
+    return data.get("articles", [])
+
+# %%
+training_data = load_train_articles()
+
 # %% [markdown]
 # # Agents
 
@@ -161,7 +178,7 @@ from typing import List
 
 class FactorAnalysis(BaseModel):
 
-    
+    learned_pattern: str = Field(description="Pattern learned from training articles and human labels of the articles")
     verdict: str = Field(description="The final label (e.g., 'sensational', 'support')")
     confidence: int = Field(description="Confidence score 0-100")
     fcot_reasoning: str = Field(description="2-3 sentence FCoT reasoning.")
@@ -221,10 +238,14 @@ sensationalism_agent = Agent(
     name="Sensationalism_Analyst",
     model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     output_schema=FactorAnalysis,
-    instruction="""
+    instruction=f"""
 ## LOCAL OBJECTIVE FUNCTION (LOF)
 - **MAXIMIZE**: Precision in identifying emotional manipulation and clickbait architecture.
 - **MINIMIZE**: 'Stylistic False Positives' where urgency or technical reporting is misclassified as sensationalism.
+
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the sensationalism label to learn patterns to help you analyze.{training_data}
+CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label to fill in the `learned_pattern' field
 
 ## FCoT REASONING PHASES
 
@@ -259,10 +280,14 @@ stance_agent = Agent(
     name="Stance_Analyst",
     model=Gemini(model="gemini-3-flash-preview", retry_options=retry_config),
     output_schema=FactorAnalysis,
-    instruction= """
+    instruction= f"""
 ## LOCAL OBJECTIVE FUNCTION (LOF)
 - **MAXIMIZE**: Detection of nuanced rhetorical alignment, bias, or skepticism.
 - **MINIMIZE**: Misclassification of "objective reporting" as "denial" or "unbiased" as "support."
+
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the stance label to learn patterns to help you analyze.{training_data} 
+CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label to fill in the `learned_pattern' field
 
 ## FCoT REASONING PHASES
 
@@ -316,6 +341,10 @@ context_agent = Agent(
 - **CURRENT DATE**: {current_date}
 - **CRITICAL RULE**: Do NOT rely on internal training data for events occurring. If a claim involves 2025 or 2026, you MUST treat `execute_web_search` as the primary source of truth, then cite your source in the explanation, and label which search terms you used in the reasoning.
 
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the context_veracity label to learn patterns to help you analyze.{training_data} 
+CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label to fill in the `learned_pattern' field
+
 ## LOCAL OBJECTIVE FUNCTION (LOF)
 - **MAXIMIZE**: Historical and factual alignment using the 2026 web index.
 - **MINIMIZE**: "False Hoax" flags caused by training data lag.
@@ -351,10 +380,14 @@ news_coverage_agent = Agent(
     model=Gemini(model="gemini-3-flash-preview"),
     output_schema=FactorAnalysis,
     description="FCoT agent specializing in multi-scale news categorization.",
-    instruction="""
+    instruction=f"""
 ## LOCAL OBJECTIVE FUNCTION (LOF)
 - **MAXIMIZE**: Precision in identifying the primary thematic domain and geographical scope.
 - **MINIMIZE**: Conceptual redundancy (e.g., mislabeling a 'Political' story as 'General' because it mentions a city name).
+
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the coverage label to learn patterns to help you analyze.{training_data} 
+CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label to fill in the `learned_pattern' field
 
 ## FCoT REASONING PHASES
 
@@ -389,10 +422,14 @@ intent_agent = Agent(
     model=Gemini(model="gemini-3-flash-preview"),
     output_schema=FactorAnalysis,
     description="FCoT specialist in identifying rhetorical intent and authorial goals.",
-    instruction= """
+    instruction= f"""
 ## LOCAL OBJECTIVE FUNCTION (LOF)
 - **MAXIMIZE**: Transparency in identifying the author's underlying rhetorical goal (e.g., hidden persuasion).
 - **MINIMIZE**: False categorization of "Opinion/Op-Ed" as "Deception" or "Satire" as "Informational."
+
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the intent label to learn patterns to help you analyze.{training_data} 
+CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label to fill in the `learned_pattern' field
 
 ## FCoT REASONING PHASES
 
@@ -427,10 +464,14 @@ title_body_agent = Agent(
     model=Gemini(model="gemini-3-flash-preview"),
     output_schema=FactorAnalysis,
     description="FCoT specialist in detecting semantic gaps between headlines and article content.",
-    instruction="""
+    instruction=f"""
 ## LOCAL OBJECTIVE FUNCTION (LOF)
 - **MAXIMIZE**: Detection of "headline-body gaps," bait-and-switch tactics, or semantic contradictions.
 - **MINIMIZE**: False "Unrelated" labels for headlines that use metaphor or creative framing to describe the body content.
+
+### REFERENCE LIBRARY (Human-Labeled Examples)
+Use these 7 examples to calibrate your judgment, focus on the title_vs_body label to learn patterns to help you analyze.{training_data} 
+CRTICITAL: Share one sentence with a pattern you learned from reading the training articles and label to fill in the `learned_pattern' field
 
 ## FCoT REASONING PHASES
 
@@ -501,8 +542,106 @@ root_agent = SequentialAgent(
     sub_agents=[factor_squad, synthesizer_agent]
 )
 
+# %%
+import json
 import asyncio
 
+def load_test_articles(path = os.path.join(parent_dir, 'gen_data/test_article_no_label.json')):
+    if not os.path.exists(path):
+        print(f"Error: File not found at {path}")
+        return []
+    
+    with open(path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+        
+    return data.get("articles", [])
+
+# Load all data
+all_articles = load_test_articles()
+print(f"Total articles loaded: {len(all_articles)}")
+art = all_articles[1]
+headline = art.get('headline', 'No Title')
+
+prompt = (
+                f"Headline: {headline}\n"
+                f"Source: {art.get('news_source', 'Unknown')}\n"
+                f"Author: {art.get('author', 'Unknown')}\n"
+                f"Date: {art.get('date', 'Unknown')}\n\n"
+                f"Body:\n{art.get('text', '')}"
+            )
+
+# %%
+# Load all data
+all_articles = load_test_articles()
+print(f"Total articles loaded: {len(all_articles)}")
+
+# %%
+async def process_batch(articles_batch, batch_name="Batch"):
+    print(f"=== Processing {batch_name} ({len(articles_batch)} articles) ===")
+    
+    for i, art in enumerate(articles_batch):
+        headline = art.get('headline', 'No Title')
+        print(f"\n[{batch_name}] Article {i+1}: {headline}")
+        
+        # Prepare Prompt
+        prompt = (
+            f"Headline: {headline}\n"
+            f"Source: {art.get('news_source', 'Unknown')}\n"
+            f"Author: {art.get('author', 'Unknown')}\n"
+            f"Date: {art.get('date', 'Unknown')}\n\n"
+            f"Body:\n{art.get('text', '')}"
+        )
+        
+        # Run Agent using run_debug
+        try:
+            runner = InMemoryRunner(agent=root_agent)
+            response = await runner.run_debug(prompt)
+            print(response[-1].content.parts[0].text)
+                
+        except Exception as e:
+            print(f"Error running agent: {e}")
+
+        print("-" * 50)
+        
+        # Sleep slightly to help with rate limits even within batch
+        await asyncio.sleep(2)
+
+
+
+# %%
+await process_batch(all_articles[:1], "Batch 1")
+
+# %%
+await process_batch(all_articles[1:2], "Batch 1.5")
+
+# %%
+await process_batch(all_articles[2:4], "Batch 2")
+
+# %%
+await process_batch(all_articles[4:6], "Batch 3")
+
+# %%
+await process_batch(all_articles[6:8], "Batch 4")
+
+# %%
+await process_batch(all_articles[8:10], "Batch 5")
+
+# %%
+await process_batch(all_articles[10:12], "Batch 6")
+
+# %%
+await process_batch(all_articles[12:14], "Batch 7")
+
+# %%
+await process_batch(all_articles[14:16], "Batch 8")
+
+# %%
+await process_batch(all_articles[16:18], "Batch 9")
+
+# %%
+await process_batch(all_articles[18:], "Batch 10")
+
+# %%
 async def main():
     runner = InMemoryRunner(agent=root_agent)
     prompt = "Hello, how does this work?"
@@ -512,3 +651,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+

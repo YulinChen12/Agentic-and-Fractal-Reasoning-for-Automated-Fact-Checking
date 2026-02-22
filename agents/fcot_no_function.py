@@ -351,3 +351,15 @@ root_agent = SequentialAgent(
     name="Fractal_FactCheck_Framework",
     sub_agents=[factor_squad, synthesizer_agent]
 )
+
+import asyncio
+
+async def main():
+    runner = InMemoryRunner(agent=root_agent)
+    prompt = "Hello, how does this work?"
+    response = await runner.run_debug(prompt)
+    
+    print(response)
+
+if __name__ == "__main__":
+    asyncio.run(main())

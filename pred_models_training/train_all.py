@@ -60,27 +60,33 @@ warnings.filterwarnings("ignore")
 def _ensure_dir():
     os.makedirs(ARTIFACT_DIR, exist_ok=True)
 
+TOPIC_ARTIFACT = os.path.join(ARTIFACT_DIR, "topic_pipeline.joblib")
 def train_topic(
-    train_tsv ="./pred_data/train2.tsv",
-    artifact_path: str = os.path.join(ARTIFACT_DIR, "topic_pipeline.joblib"),
+    train_tsv: str = "./pred_data/train2.tsv",
+    artifact_path: str = TOPIC_ARTIFACT,
     random_state: int = 42,
 ) -> dict:
     """
-    Trains the News Coverage / Topic classifier and saves it to artifact_path.
-    Returns a small dict with model + basic info.
+    Trains the News Coverage classifier using the 'subjects' column to 
+    ensure parity with the original experimental model.
     """
+    # 1. Load and Preprocess
     df_tr = read_tsv(train_tsv)
     X_tr = df_tr.apply(text_of, axis=1)
-    y_tr = df_tr["topic"].apply(first_subject)  # <-- topic label
+    
+    # CRITICAL: Use "subjects" to match your original successful model
+    y_tr = df_tr["subjects"].apply(first_subject) 
 
-    # drop unknowns
+    # 2. Filter 'unknown' labels
     keep = y_tr.ne("unknown")
     X_tr, y_tr = X_tr[keep], y_tr[keep]
 
+    # 3. Handle Class Imbalance
     classes = np.unique(y_tr)
     weights = compute_class_weight(class_weight="balanced", classes=classes, y=y_tr)
     wmap = {c: w for c, w in zip(classes, weights)}
 
+    # 4. Build Pipeline (Identical Hyperparameters)
     pipe = Pipeline([
         ("tfidf", TfidfVectorizer(
             lowercase=True,
@@ -91,15 +97,16 @@ def train_topic(
             max_df=0.9,
             sublinear_tf=True,
         )),
-        ("clf", LinearSVC(class_weight=wmap, random_state=random_state)),
+        ("clf", LinearSVC(class_weight=wmap, random_state=random_state, dual=True)),
     ])
 
+    # 5. Train and Persist
     pipe.fit(X_tr, y_tr)
 
     os.makedirs(os.path.dirname(artifact_path), exist_ok=True)
     joblib.dump(pipe, artifact_path)
 
-    out = {
+    return {
         "artifact_path": artifact_path,
         "n_train": int(len(X_tr)),
         "n_classes": int(len(classes)),

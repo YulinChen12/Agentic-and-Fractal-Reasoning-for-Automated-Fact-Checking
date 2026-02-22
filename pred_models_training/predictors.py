@@ -85,11 +85,9 @@ DEFAULT_STANCE_MODEL_DIR = os.environ.get(
 # ---------------------------
 # Helpers from notebook
 # ---------------------------
-COLS = [
-    "id", "json", "label", "statement", "topic", "speaker", "speaker_job", "state",
-    "party", "barely_true", "false", "half_true", "true", "mostly_true",
-    "pants_on_fire", "context", "justification"
-]
+COLS = ["id","label","statement","subjects","speaker","job_title",
+        "state_info","party_affiliation","barely_true_cnt","false_cnt",
+        "half_true_cnt","mostly_true_cnt","pants_on_fire_cnt","context","justification"]
 
 def read_tsv(path: str) -> pd.DataFrame:
     return pd.read_csv(
