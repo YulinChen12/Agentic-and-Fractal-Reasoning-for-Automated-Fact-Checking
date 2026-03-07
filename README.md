@@ -1,13 +1,10 @@
 # DSC180A-GroupNull: Misinformation Detection System
-
-# DO NOT MAKE IT PUBLIC
-- API Keys were in the commit history.
   
 ## Project Overview
 
 A hybrid misinformation detection framework that combines:
-- Predictive ML models (stance, sentiment, sensationalism, reputation, topic, intent)
-- Agent-based reasoning using Gemini (Chain-of-Thought & Fractal CoT)
+- Predictive ML models (stance, sensationalism, topic, intent)
+- Agent-based reasoning using Gemini (Chain-of-Thought(CoT) & Fractal CoT)
 - Optional web-grounded verification
 - Streamlit interface for interactive testing
 
@@ -18,54 +15,44 @@ The system extracts structured credibility signals from an article and integrate
 ```
 DSC180A-GroupNull/
 │
-├── agents/
-│   ├── cot_agent.py
-│   ├── fcot_agent.py
+├── agents/                     # All agent implementations
+│   ├── simple_agent/
+│   ├── cot_agent/
+│   ├── cot_icl_agent/
+│   ├── cot_no_function_calling_agent/
+│   ├── fcot_agent/
+│   ├── fcot_icl_agent/
+│   └── fcot_no_function_calling_agent/
 │
-├── artifacts/                  # Generated after training (NOT uploaded)
+├── data/                       # Dataset storage
+│   ├── gen_data/
+│   └── pred_data/
 │
-├── gen_data/
-│   ├── train_article.json
-│   ├── test_article.json
-│
-├── pred_data/
-│   ├── pl_train.csv
-│   ├── pl_val.csv
-│   ├── pl_test.csv
-│   ├── train2.tsv
-│   ├── val2.tsv
-│   ├── test2.tsv
-│
-├── pred_models_training/
+├── pred_models_training/       # Training scripts for predictive models
+│   ├── stance_model # pretrained artifacts
+│   ├── artifacts/    # local predictive model artifacts
 │   ├── predictors.py
 │   ├── train_all.py
-│   ├── stance_model/
-│   ├── reputation_model/
+│
 │
 ├── streamlit_app/
 │   ├── app.py
 │
-├── pred_article.py             # Run predictive pipeline on an article
-├── client.py                   # Client for exposed CoT agent
+├── pred_article.py             # Script to run predictions on an article
+
 ├── environment.yml
 ├── requirements.txt
-└── start_streamlit.sh
+└── .gitignore
 ```
 ### Setup Steps
-
-1. **Log into DSMLP and launch the required GPU environment**
-All model training, evaluation, and experiments should be run inside the following DSMLP container:
-```
-launch-scipy-ml.sh -W DSC180A_FA25_A00 -c 8 -m 32 -g 1
-```
    
-2. **Clone the repository**
+1. **Clone the repository**
 ```bash
 git clone https://github.com/YulinChen12/DSC180A-GroupNull.git
 cd DSC180A-GroupNull
 ```
 
-3. **Create Environment**
+2. **Create Environment**
 ```
 conda env create -f environment.yml
 conda activate dsc180
@@ -76,15 +63,24 @@ OR
 pip install -r requirements.txt
 ```
 
-4. **Ensure Git LFS is installed and pull large files**
+3. **Download Pretrained Artifacts**
+```
+https://drive.google.com/file/d/1sZnWKuClTbTjlG2rgRoGtpJKNq4_og-t/view?usp=sharing
+```
+After downloading, place them in: stance_model/
+Expected structure:
+```
+pred_models_training/      
+└── stance_model
+      └── model.safesensors  
+```
+OR
+**Ensure Git LFS is installed and pull large files**
 ```
 git lfs install
 git lfs pull
 ```
-
-**IMPORTANT: Some Model Artifacts Are NOT Included**
-
-Large trained model files are NOT uploaded due to GitHub size limits. You must generate them locally.
+Large trained model files are NOT uploaded due to GitHub size limits. You must generate them locally or download from Google drive.
 
 Generate Predictive Model Artifacts
 From the repo root, run:
