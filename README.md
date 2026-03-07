@@ -1,14 +1,20 @@
 # DSC180A-GroupNull: Misinformation Detection System
   
 ## Project Overview
+Online misinformation spreads rapidly and can influence public opinion, policy decisions, and social discourse. Detecting misleading or biased information in news articles is challenging because credibility depends not only on factual accuracy but also on factors such as tone, intent, framing, and contextual alignment between headlines and content.
 
-A hybrid misinformation detection framework that combines:
-- Predictive ML models (stance, sensationalism, topic, intent)
-- Agent-based reasoning using Gemini (Chain-of-Thought(CoT) & Fractal CoT)
-- Optional web-grounded verification
-- Streamlit interface for interactive testing
+This project builds a **hybrid misinformation detection system** that combines predictive machine learning models with large language model (LLM) reasoning agents. The system extracts structured credibility signals from an article—such as topic coverage, intent, stance, and sensationalism—and integrates them into a multi-step reasoning pipeline to assess the article's credibility.
 
-The system extracts structured credibility signals from an article and integrates them into a multi-step reasoning pipeline for final credibility analysis.
+Our framework evaluates news articles across **six factuality factors**:
+
+- **News Coverage** – the primary topic or domain of the article  
+- **Intent** – whether the article is informational, persuasive, or opinion-driven  
+- **Stance** – the article’s position toward a claim or topic  
+- **Sensationalism** – whether emotionally exaggerated or misleading language is used  
+- **Context Veracity** – whether supporting context appears credible or misleading  
+- **Title vs Body Alignment** – whether the headline accurately reflects the article content  
+
+To perform this analysis, the system combines **predictive models** trained on labeled datasets with **agent-based reasoning strategies** such as Chain-of-Thought (CoT) and Fractal Chain-of-Thought (FCoT). These agents interpret predictive signals, reason over article content, and produce a structured analysis that helps identify potential misinformation or bias.
 
 ## Repository Structure
 
