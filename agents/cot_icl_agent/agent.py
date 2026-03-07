@@ -45,7 +45,6 @@ try:
         predict_intent,
         predict_sensationalism,
         predict_article_stance,
-        analyze_complete_article
     )
     print(f"Successfully imported predictors from {predictors_dir}")
 except ImportError as e:

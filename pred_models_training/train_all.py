@@ -4,10 +4,9 @@ Trains and saves joblib artifacts for:
 - topic (news coverage)
 - intent
 - sensationalism (MLP on features)
-- sentiment (MLP on features)
  
-- ./pred_data/train2.tsv
-- ./pred_data/val2.tsv
+- ./data/pred_data/train2.tsv
+- ./data/pred_data/val2.tsv
 """
 from __future__ import annotations
 
@@ -44,13 +43,11 @@ from nltk.tokenize import sent_tokenize
 from .predictors import (
     read_tsv,
     text_of,
-    extract_sentiment_features_from_statement,
     evidence_anchors,
     ARTIFACT_DIR,
     TOPIC_ARTIFACT,
     INTENT_ARTIFACT,
     SENS_ARTIFACT,
-    SENTIMENT_ARTIFACT,
     text_of,
     first_subject
 )
@@ -62,7 +59,7 @@ def _ensure_dir():
 
 TOPIC_ARTIFACT = os.path.join(ARTIFACT_DIR, "topic_pipeline.joblib")
 def train_topic(
-    train_tsv: str = "./pred_data/train2.tsv",
+    train_tsv: str = "./data/pred_data/train2.tsv",
     artifact_path: str = TOPIC_ARTIFACT,
     random_state: int = 42,
 ) -> dict:
@@ -123,7 +120,7 @@ PROTOS = {
 }
 CLASS_NAMES = ["inform","persuade","entertain","deceive"]
 
-def train_intent(train_path="./pred_data/train2.tsv"):
+def train_intent(train_path="./data/pred_data/train2.tsv"):
     df = read_tsv(train_path)
     for c in ["statement","context","justification"]:
         df[c] = df[c].fillna("").astype(str).str.strip()
@@ -150,19 +147,6 @@ def train_intent(train_path="./pred_data/train2.tsv"):
         INTENT_ARTIFACT
     )
     return intent_tfidf
-
-def _build_feature_matrix(statements: List[str], extra_anchor_texts: List[str] | None = None):
-    rows = []
-    for i, s in enumerate(statements):
-        feats = extract_sentiment_features_from_statement(s)
-        if extra_anchor_texts is not None:
-            anchors = evidence_anchors(extra_anchor_texts[i])
-            feats.update({f"anchor_{k}": float(v) for k, v in anchors.items()})
-        rows.append(feats)
-    df = pd.DataFrame(rows).fillna(0.0)
-    cols = sorted(df.columns)
-    X = df[cols].to_numpy(dtype=np.float32)
-    return X, cols
 
 SENS_ARTIFACT = os.path.join(ARTIFACT_DIR, "sens_svc.joblib")
 
@@ -197,7 +181,7 @@ SCORE_MAP = {
 
 THRESHOLD = 2.5  # >= => sensational
 
-def train_sensationalism(train_path="./pred_data/train2.tsv"):
+def train_sensationalism(train_path="./data/pred_data/train2.tsv"):
     df_tr = read_tsv(train_path)
 
     # Clean columns
@@ -231,118 +215,6 @@ def train_sensationalism(train_path="./pred_data/train2.tsv"):
     )
     return model
 
-SENTIMENT_ARTIFACT = os.path.join(ARTIFACT_DIR, "sentiment_rf.joblib")
-
-ALPHA = 1.0
-EPS = 1e-8
-EMOTIONS_TO_ANALYZE = ["positive", "negative", "anger", "fear", "disgust",
-                       "sadness", "joy", "anticipation", "trust", "surprise"]
-_token_re = re.compile(r"[A-Za-z']+")
-
-def _word_count(text):
-    return len(_token_re.findall(str(text)))
-
-def get_sentiment_class(vader_row):
-    c = float(vader_row.get("compound", 0.0))
-    if c >= 0.05:
-        return "Positive"
-    elif c <= -0.05:
-        return "Negative"
-    else:
-        return "Neutral"
-
-def nrc_doc_score_from_text(text, alpha: float = ALPHA):
-    emo = NRCLex(str(text))
-    raw = emo.raw_emotion_scores or {}
-    pos = raw.get("positive", 0)
-    neg = raw.get("negative", 0)
-    return float(np.log((pos + alpha) / (neg + alpha)))
-
-def train_sentiment(train_path="./pred_data/train2.tsv", val_path="./pred_data/val2.tsv", text_col="statement"):
-    df_tr = read_tsv(train_path)
-    df_va = read_tsv(val_path)
-
-    for df in (df_tr, df_va):
-        df[text_col] = df[text_col].fillna("").astype(str)
-
-    train_texts = df_tr[text_col].tolist()
-
-    # Topic model artifacts (CountVectorizer + LDA)
-    vectorizer = CountVectorizer(max_df=0.9, min_df=5, stop_words="english")
-    X_train = vectorizer.fit_transform(train_texts)
-
-    topic_model = LatentDirichletAllocation(n_components=20, random_state=42, learning_method="batch")
-    topic_model.fit(X_train)
-
-    theta_train = topic_model.transform(X_train)
-    s_train = np.array([nrc_doc_score_from_text(s) for s in train_texts], dtype=float)
-
-    weights_sum = theta_train.sum(axis=0) + EPS
-    topic_mu = (theta_train.T @ s_train) / weights_sum
-
-    diffs = s_train[:, None] - topic_mu[None, :]
-    topic_var = (theta_train * diffs**2).sum(axis=0) / weights_sum
-    topic_sigma = np.sqrt(topic_var + EPS)
-
-    vader = SentimentIntensityAnalyzer()
-
-    def extract_features(statement: str):
-        s = "" if statement is None else str(statement)
-        wc = _word_count(s)
-
-        emo_obj = NRCLex(s)
-        raw = emo_obj.raw_emotion_scores or {}
-        pos = raw.get("positive", 0)
-        neg = raw.get("negative", 0)
-        emotion_logratio = float(np.log((pos + ALPHA) / (neg + ALPHA)))
-
-        X = vectorizer.transform([s])
-        theta = topic_model.transform(X)
-
-        mu_hat = float((theta @ topic_mu)[0])
-        var_hat = float((theta @ (topic_sigma ** 2))[0] + EPS)
-        sd_hat = float(np.sqrt(var_hat))
-
-        sent_dev_z = float((emotion_logratio - mu_hat) / sd_hat) if sd_hat > 0 else 0.0
-
-        v = vader.polarity_scores(s)
-        sentiment_value = get_sentiment_class(v)
-
-        return {
-            "emotion_logratio": emotion_logratio,
-            "sent_dev_z": sent_dev_z,
-            "sentiment_value": sentiment_value,
-        }
-
-    # Build train + val features
-    tr_feat = pd.DataFrame([extract_features(s) for s in df_tr[text_col].tolist()])
-    va_feat = pd.DataFrame([extract_features(s) for s in df_va[text_col].tolist()])
-
-    features = ["emotion_logratio", "sent_dev_z"]
-    X_tv = pd.concat([tr_feat[features], va_feat[features]], axis=0)
-    y_tv = pd.concat([tr_feat["sentiment_value"], va_feat["sentiment_value"]], axis=0)
-
-    sentiment_pipe = Pipeline(steps=[
-        ("scale", StandardScaler(with_mean=False)),
-        ("clf", RandomForestClassifier(
-            max_depth=5, n_estimators=10, max_features=1, random_state=42
-        ))
-    ])
-    sentiment_pipe.fit(X_tv, y_tv)
-
-    joblib.dump({
-        "vectorizer": vectorizer,
-        "topic_model": topic_model,
-        "topic_mu": topic_mu,
-        "topic_sigma": topic_sigma,
-        "features": features,
-        "pipe": sentiment_pipe,
-        "alpha": ALPHA,
-        "eps": EPS,
-    }, SENTIMENT_ARTIFACT)
-
-    return sentiment_pipe
-
 def main():
     # NLTK downloads (safe if already present)
     try:
@@ -363,8 +235,6 @@ def main():
     print("Training sensationalism...")
     train_sensationalism()
     print("Training sentiment...")
-    train_sentiment()
-    print("Done. Artifacts saved to:", ARTIFACT_DIR)
 
 if __name__ == "__main__":
     main()

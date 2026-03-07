@@ -8,7 +8,6 @@ reputation_model/model.safetensors
 stance_model/model.safetensors
 final_model.ipynb
 combined_pred_model.ipynb
-agents
 
 # Python
 __pycache__/
@@ -62,4 +61,4 @@ lerna-debug.log*
 *.ntvs*
 *.njsproj
 *.sln
-*.sw?agents/
+

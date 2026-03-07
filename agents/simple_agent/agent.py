@@ -5,23 +5,6 @@ from collections import Counter
 import nltk
 from dotenv import load_dotenv
 
-# -------------------------------------------------------------------------
-# PATH CONFIGURATION
-# -------------------------------------------------------------------------
-# Get the absolute path of the current file (agents/cot_agent.py)
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# Get the parent directory (project_root)
-parent_dir = os.path.dirname(current_dir)
-# Construct path to sibling directory (pred_models_training)
-predictors_dir = os.path.join(parent_dir, 'pred_models_training')
-
-# Add to sys.path so Python can find predictors.py
-if predictors_dir not in sys.path:
-    sys.path.append(predictors_dir)
-
-# -------------------------------------------------------------------------
-# IMPORTS
-# -------------------------------------------------------------------------
 # ADK Imports
 from google.adk.agents import Agent
 from google.adk.tools import AgentTool, google_search
@@ -30,20 +13,22 @@ from google.adk.a2a.utils.agent_to_a2a import to_a2a
 from google.genai import types
 import uvicorn
 
-# Predictors API
-try:
-    from predictors import (
-        predict_news_coverage,
-        predict_intent,
-        predict_sensationalism,
-        predict_article_stance,
-        analyze_complete_article
-    )
-    print(f"✅ Successfully imported predictors from {predictors_dir}")
-except ImportError as e:
-    print(f"❌ Failed to import predictors: {e}")
-    print(f"   Current sys.path: {sys.path}")
-    raise e
+
+from pathlib import Path
+import sys
+
+current_file = Path(__file__).resolve()
+project_root = current_file.parents[2]  
+predictors_dir = project_root / "pred_models_training"
+
+sys.path.insert(0, str(predictors_dir))
+
+from predictors import (
+    predict_news_coverage,
+    predict_intent,
+    predict_sensationalism,
+    predict_article_stance,
+)
 
 warnings.filterwarnings("ignore")
 
@@ -304,18 +289,18 @@ Return ONLY this Markdown template.
     ],
 )
 
-import asyncio
-from google.adk.runners import InMemoryRunner
+# import asyncio
+# from google.adk.runners import InMemoryRunner
 
-async def main():
-    runner = InMemoryRunner(agent=root_agent)
-    prompt = "Hello, how does this work?"
-    response = await runner.run_debug(prompt)
+# async def main():
+#     runner = InMemoryRunner(agent=root_agent)
+#     prompt = "Hello, how does this work?"
+#     response = await runner.run_debug(prompt)
     
-    print(response)
+#     print(response)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# if __name__ == "__main__":
+#     asyncio.run(main())
 
 # -------------------------------------------------------------------------
 # Server Execution
