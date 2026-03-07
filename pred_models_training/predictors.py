@@ -400,7 +400,5 @@ def predict_article_stance(article_text: Optional[str] = None, sentences: Option
     return {
         "label": label,
         "confidence": avg_conf,
-        "sentence_votes": dict(votes),
-        "sentences": [{"text": s, "label_id": i, "confidence": c} for s, i, c in zip(sentences, label_ids, confs)],
         "meta": {"model": "AutoModel sentence vote"},
     }
