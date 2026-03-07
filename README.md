@@ -110,7 +110,7 @@ This project uses multiple datasets for different components of the pipeline. Be
 
   
 ## 1. Running Predictive Pipeline Only
-After training, you can place a news article into this file to test: 
+After training the predictive models, you can run `pred_article.py` to get prediction results for a specific news article. In `pred_article.py`, replace the `article_title` and `article_text` fields with the title and full text of the article you want to analyze, then run:
 ```
 python pred_article.py
 ```
@@ -122,56 +122,70 @@ factor           label         conf
 news_coverage    ...
 intent           ...
 sensationalism   ...
-sentiment        ...
-reputation       ...
 stance           ...
 
 ```
 
-## 2.Agent Framework
-Make sure you have a AI Studio API key to run the agents!
+## 2. Agent Framework
 
-Set them in the py files:
-```
-os.environ["GOOGLE_API_KEY"] =YOUR_KEY
-```
-This project includes two reasoning agents:
+Make sure you have a **Google AI Studio API key** to run the agents.
 
-### 1. CoT Agent (```cot_agent.py```)
-- Standard Chain-of-Thought reasoning
-- Can be exposed on a shared IP
-- Designed for live API-style usage
-  
-To run:
+Set your API key in a `.env` file:
 ```
-python agents/cot_agent.py
+GOOGLE_API_KEY = "YOUR_API_KEY"
+```
+This project includes **7 reasoning agents**. All agents are located in the `agents/` directory, with each agent implemented in its own folder.
+
+### Available Agents
+
+- **Simple Agent**  
+  Uses direct prompting without structured reasoning. Serves as a baseline for comparison.
+
+- **CoT Agent (Chain-of-Thought)**  
+  Uses step-by-step reasoning to analyze articles before producing predictions.
+
+- **CoT + In-Context Learning Agent**  
+  Combines Chain-of-Thought reasoning with 9 human labeled articles prompts to guide the model.
+
+- **CoT (No Function Calling) Agent**  
+  Uses Chain-of-Thought reasoning without structured function calls.
+
+- **FCoT Agent (Fractal Chain-of-Thought)**  
+  Implements a structured reasoning framework that includes:
+  - **Local Thought Units** – decomposes reasoning into smaller reasoning modules  
+  - **Predictive Grounding** – connects reasoning steps to predictive model outputs  
+  - **Aperture Expansion** – progressively expands the reasoning context  
+  - **Reflective Update** – revises reasoning based on intermediate results  
+  - **Granularity Control** – adjusts the level of reasoning detail
+
+- **FCoT + In-Context Learning Agent**  
+  Combines Fractal Chain-of-Thought reasoning above with 9 human labeled articles prompts.
+
+- **FCoT (No Function Calling) Agent**  
+  A variant of FCoT that performs structured reasoning without explicit function execution and predictive grounding.
+
+### Running the Agent Interface
+
+You can interact with the agents using the ADK web interface.
+
+From the repository root:
+```
+cd agents
+adk web
 ```
 
-Then test using:
-```
-python client.py
-```
+This launches a local interface where you can paste a news article into the chat box.
 
-All machines using the same IP can call this agent once it's running.
+The agents will analyze the article and return results across **six factuality factors**:
 
-### 2. FCoT Agent (```fcot_agent.py```)
-- Fractal Chain-of-Thought reasoning
-- Multi-agent architecture
-- Parallel factor analysts
--  Context-grounded verification
-  
-To run:
-```
-python agents/fcot_agent.py
-```
+- **News Coverage** – topic classification of the article  
+- **Intent** – the communicative goal of the article  
+- **Stance** – the article’s position toward the topic  
+- **Sensationalism** – whether exaggerated or emotionally charged language is used  
+- **Context Veracity** – whether contextual information appears credible or misleading  
+- **Title vs Body Alignment** – whether the headline accurately reflects the article content
 
-Then test using:
-```
-python client.py
-```
-
-All machines using the same IP can call this agent once it's running.
-
+The output provides a structured analysis across these factors to help evaluate potential misinformation or bias in news articles.
 
 ### 3. Running the Streamlit App
 The Streamlit web interface is located in ```streamlit_app/app.py```
