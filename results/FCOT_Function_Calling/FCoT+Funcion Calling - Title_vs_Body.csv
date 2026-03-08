@@ -1,0 +1,21 @@
+Article ID,Human Label,Agent Label,Match
+1,Agree,Agree,TRUE
+2,Agree,Agree,TRUE
+3,Agree,Agree,TRUE
+4,Agree,Agree,TRUE
+5,Discuss,Agree,FALSE
+6,Agree,Agree,TRUE
+7,Agree,Discuss,FALSE
+8,Agree,Agree,TRUE
+9,Agree,Agree,TRUE
+10,Agree,Agree,TRUE
+11,Agree,Agree,TRUE
+12,Agree,Agree,TRUE
+13,Agree,Agree,TRUE
+14,Agree,Agree,TRUE
+15,Agree,Agree,TRUE
+16,Agree,Agree,TRUE
+17,Agree,Agree,TRUE
+18,Discuss,Agree,FALSE
+19,Agree,Agree,TRUE
+20,Agree,Agree,TRUE

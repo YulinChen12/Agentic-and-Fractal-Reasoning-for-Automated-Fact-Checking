@@ -1,0 +1,21 @@
+Article ID,Human Label,Agent Label,Match
+1,Neutral,Sensational,FALSE
+2,Neutral,Sensational,FALSE
+3,Neutral,neutral,TRUE
+4,Neutral,Sensational,FALSE
+5,Sensational,Sensational,TRUE
+6,Neutral,Sensational,FALSE
+7,Sensational,Sensational,TRUE
+8,Neutral,neutral,TRUE
+9,Neutral,sensational,FALSE
+10,Neutral,sensational,FALSE
+11,Neutral,sensational,FALSE
+12,Neutral,sensational,FALSE
+13,Sensational,sensational,TRUE
+14,Sensational,sensational,TRUE
+15,Neutral,sensational,FALSE
+16,Sensational,Sensational,TRUE
+17,Neutral,sensational,FALSE
+18,Neutral,sensational,FALSE
+19,Neutral,sensational,FALSE
+20,Sensational,sensational,TRUE

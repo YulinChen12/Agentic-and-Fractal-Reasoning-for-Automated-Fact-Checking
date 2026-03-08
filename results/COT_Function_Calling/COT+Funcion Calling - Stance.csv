@@ -1,0 +1,21 @@
+Article ID,Human Label,Agent Label,Match
+1,Against,Support,FALSE
+2,Neutral,Neutral,TRUE
+3,Neutral,Neutral,TRUE
+4,Neutral,Neutral,TRUE
+5,Against,Support,FALSE
+6,Against,Support,FALSE
+7,Against,Support,FALSE
+8,Support,Support,TRUE
+9,Support,Support,TRUE
+10,Support,Support,TRUE
+11,Neutral,Support,FALSE
+12,Support,Support,TRUE
+13,Support,Support,TRUE
+14,Neutral,Neutral,TRUE
+15,Neutral,Support,FALSE
+16,Against,Support,FALSE
+17,Neutral,Deny,FALSE
+18,Against,Support,FALSE
+19,Neutral,Support,FALSE
+20,Neutral,Support,FALSE

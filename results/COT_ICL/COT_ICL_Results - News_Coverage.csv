@@ -1,0 +1,21 @@
+Article ID,Human Label,Agent Label,Match
+1,International politics,Foreign Policy,TRUE
+2,Public Safety,Foreign Policy,TRUE
+3,Crime,Crime and Justice,TRUE
+4,International politics,Foreign Policy,TRUE
+5,Entertainment,Entertainment,TRUE
+6,Technology,Culture,FALSE
+7,Politics,Politics,TRUE
+8,US policy,Foreign Policy,FALSE
+9,Technology,Technology,TRUE
+10,Electric Car,Environment,TRUE
+11,Foreign Policy,Sports,TRUE
+12,Science,Science / Technology,TRUE
+13,Accident,Public Safety,TRUE
+14,Local policy,Lifestyle / Travel,FALSE
+15,Immigration,Immigration,TRUE
+16,Religion,Religion,TRUE
+17,Politics,Culture,TRUE
+18,Media,Media & Technology,TRUE
+19,Environment,Environment / Climate,TRUE
+20,Entertainment,Entertainment,TRUE

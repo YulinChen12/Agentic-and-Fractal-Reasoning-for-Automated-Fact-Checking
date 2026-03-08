@@ -1,0 +1,21 @@
+Article ID,Human Label,Agent Label,Accuracy
+1,Accurate,Accurate,TRUE
+2,Accurate,Accurate,TRUE
+3,Accurate,Accurate,TRUE
+4,Accurate,Accurate,TRUE
+5,Accurate,Accurate,TRUE
+6,Accurate,Accurate,TRUE
+7,Inaccurate,Accurate,FALSE
+8,Accurate,Accurate,TRUE
+9,Accurate,Inaccurate,FALSE
+10,Inaccurate,Accurate,FALSE
+11,Accurate,Accurate,TRUE
+12,Accurate,Accurate,TRUE
+13,Accurate,Accurate,TRUE
+14,Inaccurate,Accurate,FALSE
+15,Inaccurate,Accurate,FALSE
+16,Inaccurate,Accurate,FALSE
+17,Inaccurate,Inaccurate,TRUE
+18,Accurate,Accurate,TRUE
+19,Accurate,Accurate,TRUE
+20,Accurate,Accurate,TRUE

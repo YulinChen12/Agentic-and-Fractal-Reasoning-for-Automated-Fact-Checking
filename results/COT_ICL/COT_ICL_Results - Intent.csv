@@ -1,0 +1,21 @@
+Article ID,Human Label,Agent Label,Accuracy
+1,Inform,Inform,TRUE
+2,Inform,Inform,TRUE
+3,Inform,Inform,TRUE
+4,Inform,Inform,TRUE
+5,Inform,Inform,TRUE
+6,Persuade,Persuade,TRUE
+7,Deceive,Persuade,FALSE
+8,Inform,Inform,TRUE
+9,Persuade,Deceive,FALSE
+10,Deceive,Inform,FALSE
+11,Persuade,Persuade,TRUE
+12,Inform,Inform,TRUE
+13,Inform,Inform,TRUE
+14,Inform,Inform,TRUE
+15,Inform,Inform,TRUE
+16,Inform,Inform,TRUE
+17,Entertain,Entertain,TRUE
+18,Inform,Inform,TRUE
+19,Inform,Inform,TRUE
+20,Entertain,Entertain,TRUE
