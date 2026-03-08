@@ -1,4 +1,4 @@
-# DSC180A-GroupNull: Misinformation Detection System
+# Agentic and Fractal Reasoning for Automated Fact-Checking
   
 ## Project Overview
 Online misinformation spreads rapidly and can influence public opinion, policy decisions, and social discourse. Detecting misleading or biased information in news articles is challenging because credibility depends not only on factual accuracy but also on factors such as tone, intent, framing, and contextual alignment between headlines and content.
