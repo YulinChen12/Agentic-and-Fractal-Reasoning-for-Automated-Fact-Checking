@@ -206,6 +206,34 @@ The agents will analyze the article and return results across **six factuality f
 
 The output provides a structured analysis across these factors to help evaluate potential misinformation or bias in news articles.
 
+### Simplified General Output Template
+
+# Fact-Check Final Report
+
+## Agent Analysis Summary
+
+### Labels
+| Signal | Label | Confidence |
+|---|---|---|
+| News Coverage | Biased | 82% |
+| Intent | Mislead | 76% |
+| Sensationalism | High | 88% |
+| Stance | Against | 80% |
+| Title vs Body | Exaggerates | 84% |
+| Context Veracity | Missing Context | 79% |
+
+### Double-check
+- Intent and sensationalism are aligned, since the article uses exaggerated language that appears designed to mislead.
+- Context veracity lowers overall confidence because the article leaves out important background information.
+
+### Short Summary
+The article presents a real event, but it frames the story in a dramatic and one-sided way. While some details are accurate, the lack of context and exaggerated title make the overall article misleading.
+
+## Final Judgment
+- **Final Article Verdict:** Misleading
+- **Overall Confidence:** 83%
+- **Reasoning Explanation:** The article contains a mix of truth and distortion. Its strongest issues are exaggerated framing, missing context, and signals that suggest an intent to shape reader perception rather than inform clearly.
+
 ## Evaluation and Experiment Results
 ### Evaluation Metrics
 
