@@ -15,7 +15,7 @@ Article ID,Human Label,Agent Label,Match
 14,Sensational,Neutral,FALSE
 15,Neutral,Neutral,TRUE
 16,Sensational,Sensational,TRUE
-17,Neutral,Neutral,TRUE
+17,Neutral,Sensational,FALSE
 18,Neutral,Neutral,TRUE
 19,Neutral,Neutral,TRUE
 20,Sensational,Sensational,TRUE
