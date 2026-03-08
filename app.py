@@ -86,8 +86,6 @@ def download_nltk_data():
 download_nltk_data()
 
 # API Keys
-GOOGLE_API_KEY = "AIzaSyDNeWcpu-rXoKjsnd8RWCL1iJbhtukxRBU"
-SERPAPI_KEY = "2d4b3d3673b32b0d681d15159b267f4bb4d16fb9129b21b883bebacf62c0a2ca"
 
 # Data Paths
 DATA_PATH = './data/'
