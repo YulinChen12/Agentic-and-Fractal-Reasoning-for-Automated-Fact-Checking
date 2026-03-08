@@ -8,24 +8,6 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 # -------------------------------------------------------------------------
-# PATH CONFIGURATION
-# -------------------------------------------------------------------------
-try:
-    current_dir = Path(__file__).resolve().parent         
-except NameError:
-    current_dir = Path.cwd()                               
-
-parent_dir = current_dir.parent                            # project_root
-predictors_dir = parent_dir / "pred_models_training"       # sibling folder
-
-# Add to sys.path so Python can find predictors.py
-predictors_dir_str = str(predictors_dir)
-if predictors_dir_str not in sys.path:
-    sys.path.insert(0, predictors_dir_str) 
-
-print("Using predictors_dir:", predictors_dir_str)
-
-# -------------------------------------------------------------------------
 # IMPORTS
 # -------------------------------------------------------------------------
 # ADK Imports
@@ -38,18 +20,21 @@ from google.genai import types
 import uvicorn
 
 # Predictors API
-try:
-    from predictors import (
-        predict_news_coverage,
-        predict_intent,
-        predict_sensationalism,
-        predict_article_stance
-    )
-    print(f"Successfully imported predictors from {predictors_dir}")
-except ImportError as e:
-    print(f"Failed to import predictors: {e}")
-    print(f"   Current sys.path: {sys.path}")
-    raise e
+from pathlib import Path
+import sys
+
+current_file = Path(__file__).resolve()
+project_root = current_file.parents[2]
+
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from pred_models_training.predictors import (
+    predict_news_coverage,
+    predict_intent,
+    predict_sensationalism,
+    predict_article_stance,
+)
 
 warnings.filterwarnings("ignore")
 

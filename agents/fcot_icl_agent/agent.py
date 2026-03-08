@@ -8,19 +8,6 @@ from dotenv import load_dotenv
 from pathlib import Path
 import sys
 
-current_file = Path(__file__).resolve()
-project_root = current_file.parents[2]  
-predictors_dir = project_root / "pred_models_training"
-
-sys.path.insert(0, str(predictors_dir))
-
-from predictors import (
-    predict_news_coverage,
-    predict_intent,
-    predict_sensationalism,
-    predict_article_stance,
-)
-
 
 # -------------------------------------------------------------------------
 # IMPORTS
@@ -35,18 +22,21 @@ from google.genai import types
 import uvicorn
 
 # Predictors API
-try:
-    from predictors import (
-        predict_news_coverage,
-        predict_intent,
-        predict_sensationalism,
-        predict_article_stance
-    )
-    print(f"Successfully imported predictors from {predictors_dir}")
-except ImportError as e:
-    print(f"Failed to import predictors: {e}")
-    print(f"   Current sys.path: {sys.path}")
-    raise e
+from pathlib import Path
+import sys
+
+current_file = Path(__file__).resolve()
+project_root = current_file.parents[2]
+
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from pred_models_training.predictors import (
+    predict_news_coverage,
+    predict_intent,
+    predict_sensationalism,
+    predict_article_stance,
+)
 
 warnings.filterwarnings("ignore")
 

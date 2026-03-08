@@ -346,6 +346,10 @@ synthesizer_agent = Agent(
     * **25–49%:** Text is too short or vague.
     * **0–24%:** Cannot meaningfully determine.
 
+    - **Final Article Verdict:** <The definitive verdict (e.g., Verified Accurate, Misleading, Misinformation, Disinformation, etc.>
+    - **Overall_confidence:** <0-100>%
+    - **Reasoning explanation:** <A 1-3 sentence explanation synthesizing why this verdict was reached based on the factor analysis.>
+    
     - **Final Labels for News Coverage:** <label>
     - **Final Confidence:** <0-100>%
     - **Why (1 bullet):**

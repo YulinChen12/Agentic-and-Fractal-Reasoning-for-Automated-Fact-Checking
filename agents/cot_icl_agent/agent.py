@@ -9,24 +9,6 @@ from pathlib import Path
 from datetime import datetime
 
 # -------------------------------------------------------------------------
-# PATH CONFIGURATION
-# -------------------------------------------------------------------------
-try:
-    current_dir = Path(__file__).resolve().parent         
-except NameError:
-    current_dir = Path.cwd()                               
-
-parent_dir = current_dir.parent                            # project_root
-predictors_dir = parent_dir / "pred_models_training"       # sibling folder
-
-# Add to sys.path so Python can find predictors.py
-predictors_dir_str = str(predictors_dir)
-if predictors_dir_str not in sys.path:
-    sys.path.insert(0, predictors_dir_str) 
-
-print("Using predictors_dir:", predictors_dir_str)
-
-# -------------------------------------------------------------------------
 # IMPORTS
 # -------------------------------------------------------------------------
 # ADK Imports
@@ -39,18 +21,21 @@ from google.genai import types
 import uvicorn
 
 # Predictors API
-try:
-    from predictors import (
-        predict_news_coverage,
-        predict_intent,
-        predict_sensationalism,
-        predict_article_stance,
-    )
-    print(f"Successfully imported predictors from {predictors_dir}")
-except ImportError as e:
-    print(f"Failed to import predictors: {e}")
-    print(f"   Current sys.path: {sys.path}")
-    raise e
+from pathlib import Path
+import sys
+
+current_file = Path(__file__).resolve()
+project_root = current_file.parents[2]
+
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
+from pred_models_training.predictors import (
+    predict_news_coverage,
+    predict_intent,
+    predict_sensationalism,
+    predict_article_stance,
+)
 
 warnings.filterwarnings("ignore")
 
@@ -488,9 +473,10 @@ synthesizer_agent = Agent(
        - Does Intent ("Deceive") align with Sensationalism ("High")?
        - Does Title vs Body (Agree/Negate) match the body evidence?
        - Adjust confidence downward if Context Veracity reports missing sources.
+    3. Check the overall accuracy of article based on the all 6 of the signals and reasonings.
     
-    3. OUTPUT FORMAT (STRICT):
-    Return ONLY the Markdown template provided below. 
+    4. OUTPUT FORMAT (STRICT):
+
     ## Agent Analysis Summary
 
     ### Labels
@@ -518,7 +504,11 @@ synthesizer_agent = Agent(
     * **50–74%:** Text is mixed, ambiguous, or open to interpretation.
     * **25–49%:** Text is too short or vague.
     * **0–24%:** Cannot meaningfully determine.
-
+ 
+    - **Final Article Verdict:** <The definitive verdict (e.g., Verified Accurate, Misleading, Misinformation, Disinformation, etc.>
+    - **Overall_confidence:** <0-100>%
+    - **Reasoning explanation:** <A 1-3 sentence explanation synthesizing why this verdict was reached based on the factor analysis.>
+    
     - **Final Labels for News Coverage:** <label>
     - **Final Confidence:** <0-100>%
     - **Why (1 bullet):**
