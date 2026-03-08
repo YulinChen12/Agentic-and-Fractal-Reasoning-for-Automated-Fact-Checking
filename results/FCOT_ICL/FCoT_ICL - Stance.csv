@@ -4,12 +4,12 @@ Article ID,Human Label,Agent Label,Match
 3,Neutral,neutral,TRUE
 4,Neutral,neutral,TRUE
 5,Against,deny,TRUE
-6,Against,deny,TRUE
+6,Against,support, FALSE
 7,Against,support,FALSE
 8,Support,support,TRUE
 9,Support,support,TRUE
-10,Support,support,TRUE
-11,Neutral,neutral,TRUE
+10,Support,neutral,FALSE
+11,Neutral,support,FALSE
 12,Support,support,TRUE
 13,Support,support,TRUE
 14,Neutral,neutral,TRUE
