@@ -18,12 +18,12 @@ from pathlib import Path
 import sys
 
 current_file = Path(__file__).resolve()
-project_root = current_file.parents[2]  
-predictors_dir = project_root / "pred_models_training"
+project_root = current_file.parents[2]
 
-sys.path.insert(0, str(predictors_dir))
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
-from predictors import (
+from pred_models_training.predictors import (
     predict_news_coverage,
     predict_intent,
     predict_sensationalism,

@@ -11,16 +11,7 @@ import os
 from pathlib import Path
 
 
-# %%
-# -------------------------------------------------------------------------
-# PATH CONFIGURATION
-# -------------------------------------------------------------------------
-try:
-    current_dir = Path(__file__).resolve().parent         
-except NameError:
-    current_dir = Path.cwd()                               
 
-parent_dir = current_dir.parent                            # project_root
 
 # %%
 from pydantic import BaseModel, Field, ConfigDict

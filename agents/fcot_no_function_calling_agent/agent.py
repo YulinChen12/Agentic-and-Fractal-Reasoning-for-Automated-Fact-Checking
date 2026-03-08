@@ -9,19 +9,6 @@ from google.genai import types
 from dotenv import load_dotenv
 import os
 from pathlib import Path
-
-
-# %%
-# -------------------------------------------------------------------------
-# PATH CONFIGURATION
-# -------------------------------------------------------------------------
-try:
-    current_dir = Path(__file__).resolve().parent         
-except NameError:
-    current_dir = Path.cwd()                               
-
-parent_dir = current_dir.parent                            # project_root
-
 # %% [markdown]
 # # Agents
 
@@ -36,33 +23,6 @@ class FactorAnalysis(BaseModel):
     verdict: str = Field(description="The final label (e.g., 'sensational', 'support')")
     confidence: int = Field(description="Confidence score 0-100")
     fcot_reasoning: str = Field(description="2-3 sentence FCoT reasoning.")
-
-class FactCheckFinalReport(BaseModel):
-    # 1. High-Level Summary
-    final_verdict: str = Field(..., description="The definitive verdict (e.g., Verified Accurate, Misleading, Misinformation, Disinformation, etc.).")
-    overall_confidence: int = Field(..., ge=0, le=100, description="Confidence score from 0-100.")
-    
-    # 2. Human-Centric Explanation (The 'Why')
-    verdict_justification: str = Field(
-        ..., 
-        description="A 1-3 sentence explanation synthesizing why this verdict was reached based on the factor analysis."
-    )
-
-    # 3. Agent Metadata
-    agents_involved: List[str] = Field(
-        default=["Sensationalism_Analyst", "Stance_Analyst", "Context_Veracity_Analyst", 
-                 "News_Coverage_Analyst", "Intent_Analyst", "Title_Body_Analyst"],
-        description="List of specialized agents that contributed factor data."
-    )
-
-    # 4. Detailed Factor Signals
-    # These contain the individual verdicts and FCoT reasoning for the audit trail
-    sensationalism_signal: FactorAnalysis
-    stance_signal: FactorAnalysis
-    context_veracity_signal: FactorAnalysis
-    news_coverage_signal: FactorAnalysis
-    intent_signal: FactorAnalysis
-    title_body_signal: FactorAnalysis
 # -------------------------------------------------------------------------
 # Agent Configurations
 # -------------------------------------------------------------------------
@@ -333,19 +293,96 @@ factor_squad = ParallelAgent(
 synthesizer_agent = Agent(
     name="Final_Synthesizer",
     model=Gemini(model="gemini-3-flash-preview"),
-    output_schema=FactCheckFinalReport,
     instruction="""
-    You are the Final Synthesizer.
-    
-    1. **Recursive Synthesis**: Receive the 6 FactorAnalysis JSONs from the squad.
-    2. **Inter-agent Reflectivity**: Identify if any agents disagree (e.g., if Context is Accurate but Intent is Deceive).
-    3. **Retrospective Re-grounding**: If the Context_Veracity agent found a major factual error, force all other signals to be interpreted through that lens.
-    4. **Output**: Generate a 'Human_Report' field using the following Markdown structure:
+    You are the Final Judgment Lead. You will receive outputs from 6 different analysts.
 
-    1. **Executive Summary**: A bold verdict and 2-sentence 'Bottom Line Up Front'.
-    2. **Factors Analysis Table**: A table with columns: | Factor | Verdict | Confidence | Key Evidence |.
-    """
-)
+    YOUR TASKS:
+    1. **Recursive Synthesis**: Receive the 6 FactorAnalysis JSONs from the squad. 
+    2. **Inter-agent Reflectivity**: Identify if any agents disagree (e.g., if Context is Accurate but Intent is Deceive). 
+    3. **Retrospective Re-grounding**: If the Context_Veracity agent found a major factual error, force all other signals to be interpreted through that lens. 
+    4. **Output**: Generate a report using the following Markdown structure:
+    
+    OUTPUT FORMAT (STRICT):
+
+    # Fact-Check Final Report
+    ## Executive Summary
+    **Verdict:** <final verdict>
+
+    <2-sentence bottom line up front>
+
+    ## Agent Analysis Summary
+
+    ### Labels
+    | Signal | Label | Confidence |
+    |---|---|---|
+    | News Coverage | <label> | <0-100>% |
+    | Intent | <label> | <0-100>% |
+    | Sensationalism | <label> | <0-100>% |
+    | Stance | <label> | <0-100>% |
+    | Title vs Body | <label> | <0-100>% |
+    | Context Veracity | <label> | <0-100>% |
+
+    ### Double-check
+    - <one sentence on whether the signals support each other or conflict>
+    - <one sentence on whether Context Veracity changes how the article should be interpreted>
+
+    ### Short Summary
+    <2-3 sentences summarizing the article body and the main issue being evaluated>
+
+    ## Final Judgment
+
+    **CONFIDENCE SCORE RUBRIC (0–100%):**
+    * **90–100%:** Explicit, unambiguous evidence supports the label.
+    * **75–89%:** Strong trend with mostly consistent evidence.
+    * **50–74%:** Mixed, partial, or somewhat ambiguous evidence.
+    * **25–49%:** Weak, vague, or limited evidence.
+    * **0–24%:** Cannot meaningfully determine.
+
+    - **Final Article Verdict:** <Verified Accurate, Misleading, Misinformation, Disinformation, etc.>
+    - **Overall Confidence:** <0-100>%
+    - **Reasoning Explanation:** <1-3 sentences explaining why this final verdict was reached>
+
+    ### Final Signal Judgments
+
+    - **Final Label for News Coverage:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+      - <bullet 1>
+
+    - **Final Label for Intent:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+      - <bullet 1>
+
+    - **Final Label for Sensationalism:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (up to 3 bullets):**
+      - <bullet 1>
+      - <bullet 2>
+      - <bullet 3>
+
+    - **Final Label for Stance:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+      - <bullet 1>
+
+    - **Final Label for Title vs Body:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+      - <bullet 1>
+
+    - **Final Label for Context Veracity:** <label>
+    - **Final Confidence:** <0-100>%
+    - **Why (1 bullet):**
+      - <bullet 1>
+
+    RULES:
+    - Do not include raw tool outputs.
+    - Do not mention tool traces or internal IDs.
+    - Be consistent across labels, confidence scores, and explanations.
+    - If signals conflict, explicitly mention that in the Double-check or Reasoning Explanation.
+    - Keep the report readable and concise.
+    """)
 
 root_agent = SequentialAgent(
     name="Fractal_FactCheck_Framework",

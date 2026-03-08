@@ -139,7 +139,7 @@ def tool_stance(article_text: str) -> dict:
 import json
 import asyncio
 
-def load_train_articles(path = os.path.join(parent_dir, 'gen_data/train_article.json')):
+def load_train_articles(path = project_root / "data" / "gen_data" / "train_article.json"):
     if not os.path.exists(path):
         print(f"Error: File not found at {path}")
         return []
