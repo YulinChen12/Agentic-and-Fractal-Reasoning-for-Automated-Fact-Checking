@@ -9,6 +9,23 @@ from pathlib import Path
 from datetime import datetime
 
 # -------------------------------------------------------------------------
+# PATH CONFIGURATION
+# -------------------------------------------------------------------------
+try:
+    current_dir = Path(__file__).resolve().parent         
+except NameError:
+    current_dir = Path.cwd()                               
+
+parent_dir = current_dir.parent.parent                     # project_root
+predictors_dir = parent_dir / "pred_models_training"       # sibling folder
+
+# Add to sys.path so Python can find predictors.py
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
+
+print("Using project root:", parent_dir)
+
+# -------------------------------------------------------------------------
 # IMPORTS
 # -------------------------------------------------------------------------
 # ADK Imports
@@ -19,23 +36,31 @@ from google.adk.runners import InMemoryRunner
 from google.adk.a2a.utils.agent_to_a2a import to_a2a
 from google.genai import types
 import uvicorn
+import json
+import asyncio
 
 # Predictors API
-from pathlib import Path
-import sys
-
-current_file = Path(__file__).resolve()
-project_root = current_file.parents[2]
-
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from pred_models_training.predictors import (
-    predict_news_coverage,
-    predict_intent,
-    predict_sensationalism,
-    predict_article_stance,
-)
+try:
+    from pred_models_training.predictors import (
+        predict_news_coverage,
+        predict_intent,
+        predict_sensationalism,
+        predict_article_stance,
+    )
+    print(f"Successfully imported predictors from pred_models_training")
+except ImportError as e:
+    # Fallback for legacy setups
+    try:
+        from predictors import (
+            predict_news_coverage,
+            predict_intent,
+            predict_sensationalism,
+            predict_article_stance,
+        )
+    except ImportError:
+        print(f"Failed to import predictors: {e}")
+        print(f"   Current sys.path: {sys.path}")
+        raise e
 
 warnings.filterwarnings("ignore")
 
@@ -136,10 +161,12 @@ def tool_stance(article_text: str) -> dict:
     return result
 
 # %%
-import json
-import asyncio
-
-def load_train_articles(path = project_root / "data" / "gen_data" / "train_article.json"):
+def load_train_articles(path = None):
+    # Default to using parent_dir constructed from Path(__file__)
+    # parent_dir/data/gen_data/train_article.json
+    if path is None:
+        path = parent_dir / "data" / "gen_data" / "train_article.json"
+    
     if not os.path.exists(path):
         print(f"Error: File not found at {path}")
         return []
@@ -579,5 +606,3 @@ if __name__ == "__main__":
     # Using 'a2a_app' here instead of 'app' to match the doc's naming
     uvicorn.run(a2a_app, host="0.0.0.0", port=8000)
 '''
-
-

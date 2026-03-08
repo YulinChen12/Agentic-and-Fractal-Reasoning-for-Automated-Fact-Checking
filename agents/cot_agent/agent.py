@@ -16,15 +16,14 @@ try:
 except NameError:
     current_dir = Path.cwd()                               
 
-parent_dir = current_dir.parent                            # project_root
+parent_dir = current_dir.parent.parent                     # project_root
 predictors_dir = parent_dir / "pred_models_training"       # sibling folder
 
 # Add to sys.path so Python can find predictors.py
-predictors_dir_str = str(predictors_dir)
-if predictors_dir_str not in sys.path:
-    sys.path.insert(0, predictors_dir_str) 
+if str(parent_dir) not in sys.path:
+    sys.path.insert(0, str(parent_dir))
 
-print("Using predictors_dir:", predictors_dir_str)
+print("Using project root:", parent_dir)
 
 # -------------------------------------------------------------------------
 # IMPORTS
@@ -39,21 +38,27 @@ from google.genai import types
 import uvicorn
 
 # Predictors API
-from pathlib import Path
-import sys
-
-current_file = Path(__file__).resolve()
-project_root = current_file.parents[2]
-
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from pred_models_training.predictors import (
-    predict_news_coverage,
-    predict_intent,
-    predict_sensationalism,
-    predict_article_stance,
-)
+try:
+    from pred_models_training.predictors import (
+        predict_news_coverage,
+        predict_intent,
+        predict_sensationalism,
+        predict_article_stance,
+    )
+    print(f"Successfully imported predictors from pred_models_training")
+except ImportError as e:
+    # Fallback for legacy setups
+    try:
+        from predictors import (
+            predict_news_coverage,
+            predict_intent,
+            predict_sensationalism,
+            predict_article_stance,
+        )
+    except ImportError:
+        print(f"Failed to import predictors: {e}")
+        print(f"   Current sys.path: {sys.path}")
+        raise e
 
 warnings.filterwarnings("ignore")
 
@@ -424,7 +429,7 @@ title_body_agent = Agent(
 
 
 # %%
-factor_squad = ParallelAgent(
+factor_squad = SequentialAgent(
     name="Factor_Squad",
     sub_agents=[
         sensationalism_agent, 
@@ -556,5 +561,3 @@ if __name__ == "__main__":
     # Using 'a2a_app' here instead of 'app' to match the doc's naming
     uvicorn.run(a2a_app, host="0.0.0.0", port=8000)
 '''
-
-

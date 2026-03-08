@@ -21,26 +21,26 @@ To perform this analysis, the system combines **predictive models** trained on l
 ```
 DSC180A-GroupNull/
 │
-├── agents/                     # All agent implementations
-│   ├── simple_agent/
-│   ├── cot_agent/
-│   ├── cot_icl_agent/
+├── agents/                     # LLM-based reasoning agents
+│   ├── simple_agent/           # Baseline agent
+│   ├── cot_agent/              # Chain-of-Thought (CoT) agent
+│   ├── cot_icl_agent/          # CoT with In-Context Learning
 │   ├── cot_no_function_calling_agent/
-│   ├── fcot_agent/
-│   ├── fcot_icl_agent/
+│   ├── fcot_agent/             # Fractal CoT agent
+│   ├── fcot_icl_agent/         # Fractal CoT with ICL
 │   └── fcot_no_function_calling_agent/
 │
-├── data/                       # Dataset storage
-│   ├── gen_data/
-│   └── pred_data/
+├── data/                       # Datasets
+│   ├── gen_data/               # JSON data for agent training/eval
+│   └── pred_data/              # CSV/TSV data for predictive models
 │
-├── pred_models_training/       # Training scripts for predictive models
-│   ├── stance_model # pretrained artifacts
-│   ├── artifacts/    # local predictive model artifacts
-│   ├── predictors.py
-│   ├── train_all.py
+├── pred_models_training/       # Predictive Model Pipeline
+│   ├── artifacts/              # Trained joblib artifacts (LinearSVC, etc.)
+│   ├── stance_model/           # Fine-tuned BERT/RoBERTa model files
+│   ├── predictors.py           # Python interface for all predictive models
+│   └── train_all.py            # Script to retrain all models
 │
-├── results/
+├── results/                    # Evaluation Results (CSVs)
 │   ├── Simple_Agent/
 │   ├── COT_Function_Calling/
 │   ├── COT_ICL/
@@ -49,15 +49,20 @@ DSC180A-GroupNull/
 │   ├── FCOT_ICL/
 │   └── FCOT_No_Function_Calling/
 │
-├── streamlit_app/
-│   ├── app.py
+├── streamlit_app/              # Interactive Web Application
+│   └── app.py                  # Main Streamlit application entry point
 │
-├── pred_article.py             # Script to run predictions on an article
-
-├── environment.yml
-├── requirements.txt
-└── .gitignore
+├── website/                    # Project Website (React/Vite)
+│   ├── src/
+│   └── public/
+│
+├── pred_article.py             # CLI script for quick article analysis
+├── start_streamlit.sh          # Helper script to launch the app
+├── environment.yml             # Conda environment definition
+├── requirements.txt            # Pip requirements
+└── README.md
 ```
+
 ### Setup Steps
    
 1. **Clone the repository**
@@ -178,6 +183,28 @@ This project includes **7 reasoning agents**. All agents are located in the `age
 - **FCoT (No Function Calling) Agent**  
   A variant of FCoT that performs structured reasoning without explicit function execution and predictive grounding.
 
+### Running the Agent Interface
+
+You can interact with the agents using the ADK web interface.
+
+From the repository root:
+```
+cd agents
+adk web
+```
+
+This launches a local interface where you can paste a news article into the chat box.
+
+The agents will analyze the article and return results across **six factuality factors**:
+
+- **News Coverage** – topic classification of the article  
+- **Intent** – the communicative goal of the article  
+- **Stance** – the article’s position toward the topic  
+- **Sensationalism** – whether exaggerated or emotionally charged language is used  
+- **Context Veracity** – whether contextual information appears credible or misleading  
+- **Title vs Body Alignment** – whether the headline accurately reflects the article content
+
+The output provides a structured analysis across these factors to help evaluate potential misinformation or bias in news articles.
 
 ## Evaluation and Experiment Results
 ### Evaluation Metrics
@@ -259,4 +286,3 @@ This launches a live UI where users can paste article text to
 - Visualize stance, sentiment, sensationalism, reputation, news coverage predictions
 - Get additional feature labels: title vs body alignment, context veracity, location
 - Run the agentic Gemini-based credibility analysis
-
